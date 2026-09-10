@@ -74,27 +74,67 @@ class SuspiciousAttachmentDetector(BaseDetector):
                 ))
                 continue
 
-            # 3. Macro-Enabled Document
+            # 3. Macro-Enabled Document with Static VBA Triage
             if att.is_macro:
-                findings.append(FindingData(
-                    detector=self.name,
-                    severity=SeverityLevel.high,
-                    title=f"Macro-Enabled Office Attachment ({att.filename})",
-                    detail=(
-                        f"The attachment '{att.filename}' is a macro-enabled Office container. "
-                        "Adversaries frequently weaponize VBA macros to download second-stage malware or ransomware."
-                    ),
-                    evidence_ref=ev_ref,
-                    confidence=0.95,
-                    raw_evidence={
-                        "filename": att.filename,
-                        "sha256": att.sha256,
-                        "content_type": att.content_type,
-                        "size": att.size,
-                        "is_macro": True,
-                    }
-                ))
-                continue
+                from app.forensics.macro_analyzer import VbaMacroAnalyzer
+
+                macro_result = VbaMacroAnalyzer.analyze_attachment(
+                    filename=att.filename,
+                    raw_bytes=att.raw_bytes,
+                    sha256=att.sha256
+                )
+
+                if macro_result.has_macros and macro_result.is_malicious:
+                    triggers_str = ", ".join(macro_result.triggers) if macro_result.triggers else "Manual"
+                    keywords_str = ", ".join(k.keyword for k in macro_result.suspicious_keywords[:4])
+                    findings.append(FindingData(
+                        detector=self.name,
+                        severity=SeverityLevel.critical,
+                        title=f"Weaponized VBA Macro Attachment ({att.filename})",
+                        detail=(
+                            f"The attachment '{att.filename}' contains weaponized VBA macro code. "
+                            f"Identified execution triggers: [{triggers_str}], suspicious capabilities: [{keywords_str}]. "
+                            "Direct static analysis confirms presence of system execution and/or network cradle logic."
+                        ),
+                        evidence_ref=f"{ev_ref}.vba",
+                        confidence=0.98,
+                        raw_evidence=macro_result.to_dict()
+                    ))
+                    continue
+                elif macro_result.has_macros:
+                    findings.append(FindingData(
+                        detector=self.name,
+                        severity=SeverityLevel.high,
+                        title=f"Macro-Enabled Office Attachment ({att.filename})",
+                        detail=(
+                            f"The attachment '{att.filename}' contains {macro_result.macro_count} embedded VBA macro stream(s). "
+                            "Adversaries frequently weaponize Office macros to download second-stage malware or ransomware."
+                        ),
+                        evidence_ref=ev_ref,
+                        confidence=0.95,
+                        raw_evidence=macro_result.to_dict()
+                    ))
+                    continue
+                else:
+                    findings.append(FindingData(
+                        detector=self.name,
+                        severity=SeverityLevel.high,
+                        title=f"Macro-Enabled Office Container ({att.filename})",
+                        detail=(
+                            f"The attachment '{att.filename}' is a macro-enabled Office container ('{ext}'). "
+                            "Adversaries frequently weaponize VBA macros to download second-stage malware or ransomware."
+                        ),
+                        evidence_ref=ev_ref,
+                        confidence=0.95,
+                        raw_evidence={
+                            "filename": att.filename,
+                            "sha256": att.sha256,
+                            "content_type": att.content_type,
+                            "size": att.size,
+                            "is_macro": True,
+                        }
+                    ))
+                    continue
 
             # 4. Disk Image / Suspicious Container
             if ext in ARCHIVE_CONTAINER_EXTENSIONS:

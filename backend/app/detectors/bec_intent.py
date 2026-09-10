@@ -32,7 +32,11 @@ class BecIntentDetector(BaseDetector):
         findings: List[FindingData] = []
         subject = parsed.headers.get("subject", "")
         body = parsed.body_text or ""
-        full_text = f"{subject}\n{body}".lower()
+        
+        # De-obfuscate zero-width characters and homoglyphs to defeat evasion
+        from app.forensics.obfuscation import ObfuscationAnalyzer
+        deobf_res = ObfuscationAnalyzer.analyze_text(f"{subject}\n{body}")
+        full_text = deobf_res.normalized_text.lower()
 
         matched_financial = [p for p in FINANCIAL_PATTERNS if re.search(p, full_text)]
         matched_urgency = [p for p in URGENCY_PATTERNS if re.search(p, full_text)]

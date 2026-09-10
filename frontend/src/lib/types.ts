@@ -260,3 +260,46 @@ export interface ParsedEmailResponse {
   received_chain_json?: ReceivedHop[] | null;
   parsed_at: string;
 }
+
+export interface MacroKeywordItem {
+  type: string;
+  keyword: string;
+  description: string;
+}
+
+export interface MacroAnalysisItem {
+  filename: string;
+  sha256: string;
+  has_macros: boolean;
+  is_malicious: boolean;
+  macro_count: number;
+  triggers: string[];
+  suspicious_keywords: MacroKeywordItem[];
+  extracted_iocs: { type: string; value: string }[];
+  code_preview: string;
+  error_message?: string | null;
+}
+
+export interface MacroAnalysisListResponse {
+  items: MacroAnalysisItem[];
+  total: number;
+}
+
+export interface ObfuscationSection {
+  original_preview: string;
+  normalized_preview: string;
+  has_evasion: boolean;
+  zero_width_count: number;
+  zero_width_chars: Record<string, any>[];
+  rlo_detected: boolean;
+  rlo_chars: Record<string, any>[];
+  homoglyphs_detected: boolean;
+  homoglyphs_found: Record<string, any>[];
+  mixed_script_tokens: string[];
+}
+
+export interface ObfuscationAnalysisResponse {
+  has_evasion: boolean;
+  body: ObfuscationSection;
+  subject: ObfuscationSection;
+}

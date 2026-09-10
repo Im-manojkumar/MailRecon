@@ -16,7 +16,12 @@ from app.models.indicator import Indicator
 from app.models.parsed_email import ParsedEmail
 from app.models.report import Report, ReportFormat
 from app.reporting.generator import ForensicReportGenerator
-from app.schemas.analysis import AIAnalysisResponse, RiskScoreResponse
+from app.schemas.analysis import (
+    AIAnalysisResponse,
+    MacroAnalysisListResponse,
+    ObfuscationAnalysisResponse,
+    RiskScoreResponse,
+)
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
 from app.schemas.finding import FindingListResponse
 from app.schemas.indicator import IndicatorGraphResponse, IndicatorListResponse
@@ -358,6 +363,34 @@ async def download_report(
         "Content-Disposition": f'inline; filename="case_{case.id}_report_{report.id}.{report.format.value}"',
     }
     return Response(content=content, media_type=media_type, headers=headers)
+
+
+@router.get("/{id}/macros", response_model=MacroAnalysisListResponse)
+async def get_case_macros(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    items = meta.get("macro_analysis", [])
+    return MacroAnalysisListResponse(items=items, total=len(items))
+
+
+@router.get("/{id}/obfuscation", response_model=ObfuscationAnalysisResponse)
+async def get_case_obfuscation(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    obf_data = meta.get("obfuscation_analysis", {
+        "has_evasion": False,
+        "body": {},
+        "subject": {},
+    })
+    return ObfuscationAnalysisResponse(**obf_data)
 
 
 @router.get("/{id}/original")

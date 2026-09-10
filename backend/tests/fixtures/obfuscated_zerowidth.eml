@@ -1,0 +1,20 @@
+From: "Finance Director" <director@legit-corp.com>
+To: accounting@mycompany.com
+Subject: U​R​G​E​N​T: W​i​r​e  T​r​a​n​s​f​e​r Request
+Date: Wed, 10 Sep 2026 10:00:00 +0000
+Message-ID: <zw_fixture_123@legit-corp.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+Authentication-Results: mx.mycompany.com; spf=pass smtp.mailfrom=director@legit-corp.com; dkim=pass header.d=legit-corp.com; dmarc=pass
+Received: from mail.legit-corp.com (mail.legit-corp.com [198.51.100.15])
+    by mx.mycompany.com (Postfix) with ESMTPS id 4Zw719001
+    for <accounting@mycompany.com>; Wed, 10 Sep 2026 10:00:02 +0000
+
+Hello,
+
+Please process this w​i​r​e  t​r​a​n​s​f​e​r i​m​m​e​d​i​a​t​e​l​y today.
+This transaction is s​t​r​i​c​t​l​y  c​o​n​f​i​d​e​n​t​i​a​l and must not be discussed with anyone in the office.
+
+Regards,
+Executive Team

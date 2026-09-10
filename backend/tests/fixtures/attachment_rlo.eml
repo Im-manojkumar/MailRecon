@@ -1,0 +1,26 @@
+From: "HR Payroll" <payroll@corp-internal.com>
+To: victim@example.com
+Subject: Action Required: Updated Benefit Plan
+Date: Wed, 10 Sep 2026 10:10:00 +0000
+Message-ID: <rlo_fixture_789@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_Part_RLO_123456"
+Received: from mail.corp-internal.com (mail.corp-internal.com [198.51.100.22])
+    by mx.example.com with ESMTPS id 4Rlo999;
+    Wed, 10 Sep 2026 10:10:02 +0000
+
+------=_Part_RLO_123456
+Content-Type: text/plain; charset="utf-8"
+
+Please review the attached benefit adjustments.
+
+HR Department
+
+------=_Part_RLO_123456
+Content-Type: application/octet-stream; name="Benefits_2026_‮fdp.exe"
+Content-Disposition: attachment; filename="Benefits_2026_‮fdp.exe"
+Content-Transfer-Encoding: base64
+
+TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAyAAAAA==
+------=_Part_RLO_123456--

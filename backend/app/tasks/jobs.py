@@ -159,12 +159,38 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         except Exception as e:
             logger.warning(f"Failed to build indicator graph for case {case_id}: {e}")
 
+        # 11. Static VBA macro analysis for Office attachments
+        from app.forensics.macro_analyzer import VbaMacroAnalyzer
+        macro_results_list = []
+        try:
+            for att in parsed_result.attachments:
+                if att.is_macro or att.raw_bytes:
+                    res = VbaMacroAnalyzer.analyze_attachment(att.filename, att.raw_bytes, att.sha256)
+                    if res.has_macros:
+                        macro_results_list.append(res.to_dict())
+            current_metadata["macro_analysis"] = macro_results_list
+        except Exception as e:
+            logger.warning(f"Failed to analyze VBA macros for case {case_id}: {e}")
+
+        # 12. Evasive obfuscation analysis (zero-width, RLO, homoglyphs)
+        from app.forensics.obfuscation import ObfuscationAnalyzer
+        try:
+            body_obf = ObfuscationAnalyzer.analyze_text(parsed_result.body_text or "")
+            subj_obf = ObfuscationAnalyzer.analyze_text(parsed_result.headers.get("subject", ""))
+            current_metadata["obfuscation_analysis"] = {
+                "body": body_obf.to_dict(),
+                "subject": subj_obf.to_dict(),
+                "has_evasion": body_obf.has_evasion or subj_obf.has_evasion,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to analyze obfuscation for case {case_id}: {e}")
+
         if parsed_result.mime_depth_exceeded:
             current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
 
         case.metadata_json = current_metadata
 
-        # 11. Transition status to completed
+        # 13. Transition status to completed
         case.status = CaseStatus.completed
 
         await session.commit()

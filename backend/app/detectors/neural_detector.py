@@ -31,10 +31,15 @@ class NeuralSequenceDetector(BaseDetector):
         # Combine subject and body text for linguistic sequence analysis
         subject = parsed.headers.get("subject") or parsed.headers.get("Subject") or ""
         body = parsed.body_text or ""
-        text = f"{subject}\n\n{body}".strip()
+        raw_text = f"{subject}\n\n{body}".strip()
 
-        if not text:
+        if not raw_text:
             return findings
+
+        # De-obfuscate to prevent evasion against neural tokenizer
+        from app.forensics.obfuscation import ObfuscationAnalyzer
+        deobf_res = ObfuscationAnalyzer.analyze_text(raw_text)
+        text = deobf_res.normalized_text if deobf_res.has_evasion else raw_text
 
         prediction = self.classifier.predict(text)
         if not prediction or not prediction.is_phishing:

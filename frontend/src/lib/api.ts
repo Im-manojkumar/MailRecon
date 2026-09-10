@@ -14,6 +14,8 @@ import {
   RouteAnalysisResponse,
   QrCodeResult,
   ParsedEmailResponse,
+  MacroAnalysisListResponse,
+  ObfuscationAnalysisResponse,
 } from './types';
 
 class ApiClient {
@@ -128,6 +130,14 @@ class ApiClient {
     downloadReport: async (caseId: string, reportId: string): Promise<Blob> => {
       const res = await this.fetchAuth(`/api/cases/${caseId}/reports/${reportId}`);
       return res.blob();
+    },
+    getMacros: async (id: string): Promise<MacroAnalysisListResponse> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/macros`);
+      return res.json();
+    },
+    getObfuscation: async (id: string): Promise<ObfuscationAnalysisResponse> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/obfuscation`);
+      return res.json();
     },
     downloadOriginal: async (id: string): Promise<Blob> => {
       const res = await this.fetchAuth(`/api/cases/${id}/original`);

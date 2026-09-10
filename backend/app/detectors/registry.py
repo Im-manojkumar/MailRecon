@@ -3,6 +3,7 @@ from typing import List
 from app.detectors.auth_failure import AuthFailureDetector
 from app.detectors.base import BaseDetector, FindingData
 from app.detectors.bec_intent import BecIntentDetector
+from app.detectors.evasive_obfuscation import EvasiveObfuscationDetector
 from app.detectors.identity_spoofing import IdentitySpoofingDetector
 from app.detectors.neural_detector import NeuralSequenceDetector
 from app.detectors.suspicious_attachment import SuspiciousAttachmentDetector
@@ -16,6 +17,7 @@ DEFAULT_DETECTORS: List[BaseDetector] = [
     SuspiciousUrlDetector(),
     BecIntentDetector(),
     NeuralSequenceDetector(),
+    EvasiveObfuscationDetector(),
 ]
 
 

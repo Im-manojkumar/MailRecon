@@ -13,6 +13,8 @@ import {
   AIAnalysisResponse,
   IndicatorGraphResponse,
   ReportResponse,
+  MacroAnalysisItem,
+  ObfuscationAnalysisResponse,
 } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import SeverityBadge from '@/components/SeverityBadge';
@@ -48,6 +50,8 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const [parsed, setParsed] = useState<ParsedEmailResponse | null>(null);
   const [route, setRoute] = useState<RouteAnalysisResponse | null>(null);
   const [qrCodes, setQrCodes] = useState<QrCodeResult[]>([]);
+  const [macros, setMacros] = useState<MacroAnalysisItem[]>([]);
+  const [obfuscation, setObfuscation] = useState<ObfuscationAnalysisResponse | null>(null);
   const [aiData, setAiData] = useState<AIAnalysisResponse | null>(null);
   const [graph, setGraph] = useState<IndicatorGraphResponse | null>(null);
   const [reports, setReports] = useState<ReportResponse[]>([]);
@@ -67,7 +71,9 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       api.cases.getAIAnalysis(params.id),
       api.cases.getGraph(params.id),
       api.cases.getReports(params.id),
-    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes, reportsRes]) => {
+      api.cases.getMacros(params.id),
+      api.cases.getObfuscation(params.id),
+    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes, reportsRes, macRes, obfRes]) => {
       if (caseRes.status === 'fulfilled') setCaseData(caseRes.value);
       if (scoreRes.status === 'fulfilled') setScore(scoreRes.value);
       if (findingsRes.status === 'fulfilled') {
@@ -85,6 +91,8 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       if (aiRes.status === 'fulfilled') setAiData(aiRes.value);
       if (graphRes.status === 'fulfilled') setGraph(graphRes.value);
       if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.items || reportsRes.value.reports || []);
+      if (macRes.status === 'fulfilled') setMacros(macRes.value.items || []);
+      if (obfRes.status === 'fulfilled') setObfuscation(obfRes.value);
       setLoading(false);
     });
   }, [params.id]);
@@ -285,7 +293,13 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
 
           {/* TAB 2: EMAIL & HEADERS */}
           {activeTab === 'email' && (
-            <EmailViewer parsed={parsed} qrCodes={qrCodes} caseId={caseData.id} />
+            <EmailViewer
+              parsed={parsed}
+              qrCodes={qrCodes}
+              macros={macros}
+              obfuscation={obfuscation}
+              caseId={caseData.id}
+            />
           )}
 
           {/* TAB 3: ROUTE & GEOIP */}
