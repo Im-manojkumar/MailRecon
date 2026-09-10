@@ -223,6 +223,31 @@ async def get_case_ai_analysis(
     return ai_analysis
 
 
+@router.get("/{id}/route")
+async def get_case_route(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    metadata = case.metadata_json or {}
+    return metadata.get(
+        "route_analysis",
+        {"hops": [], "total_transit_seconds": 0.0, "anomalies": []},
+    )
+
+
+@router.get("/{id}/qr-codes")
+async def get_case_qr_codes(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    metadata = case.metadata_json or {}
+    return metadata.get("qr_codes", [])
+
+
 @router.post("/{id}/report", status_code=status.HTTP_202_ACCEPTED)
 async def generate_report(
     id: uuid.UUID,

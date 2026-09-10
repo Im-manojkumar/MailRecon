@@ -129,6 +129,22 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         except Exception as e:
             logger.warning(f"Failed to compute risk score for case {case_id}: {e}")
 
+        # 8. Forensic route analysis and GeoIP enrichment
+        from app.enrichment.route_analyzer import RouteAnalyzer
+        try:
+            route_res = RouteAnalyzer.analyze(parsed_result.received_chain)
+            current_metadata["route_analysis"] = route_res.to_dict()
+        except Exception as e:
+            logger.warning(f"Failed to analyze route for case {case_id}: {e}")
+
+        # 9. Quishing inspection (QR Code matrix decoding)
+        from app.enrichment.qr_decoder import QrCodeDecoder
+        try:
+            qr_codes = QrCodeDecoder.inspect_attachments(parsed_result.attachments)
+            current_metadata["qr_codes"] = [q.to_dict() for q in qr_codes]
+        except Exception as e:
+            logger.warning(f"Failed to inspect QR codes for case {case_id}: {e}")
+
         if parsed_result.mime_depth_exceeded:
             current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
 

@@ -23,6 +23,9 @@ dependencies = [
     "bleach",
     "onnxruntime>=1.18.0",
     "numpy>=1.26.0",
+    "pillow>=10.0.0",
+    "pyzbar>=0.1.9",
+    "qrcode>=8.0",
 ]
 
 [project.optional-dependencies]
