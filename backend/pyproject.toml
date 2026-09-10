@@ -21,6 +21,8 @@ dependencies = [
     "passlib[bcrypt]",
     "bcrypt>=4.0,<5",
     "bleach",
+    "onnxruntime>=1.18.0",
+    "numpy>=1.26.0",
 ]
 
 [project.optional-dependencies]

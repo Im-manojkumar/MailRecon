@@ -4,6 +4,7 @@ from app.detectors.auth_failure import AuthFailureDetector
 from app.detectors.base import BaseDetector, FindingData
 from app.detectors.bec_intent import BecIntentDetector
 from app.detectors.identity_spoofing import IdentitySpoofingDetector
+from app.detectors.neural_detector import NeuralSequenceDetector
 from app.detectors.suspicious_attachment import SuspiciousAttachmentDetector
 from app.detectors.suspicious_url import SuspiciousUrlDetector
 from app.parser.email_parser import ParsedEmailResult
@@ -14,6 +15,7 @@ DEFAULT_DETECTORS: List[BaseDetector] = [
     SuspiciousAttachmentDetector(),
     SuspiciousUrlDetector(),
     BecIntentDetector(),
+    NeuralSequenceDetector(),
 ]
 
 
