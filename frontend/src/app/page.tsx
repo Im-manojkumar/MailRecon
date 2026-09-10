@@ -4,18 +4,18 @@ import React, { useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import FileUpload from '@/components/FileUpload';
 import { api } from '@/lib/api';
-import { CaseDetail } from '@/lib/types';
+import { CaseResponse } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import Link from 'next/link';
 
 export default function Dashboard() {
-  const [cases, setCases] = useState<CaseDetail[]>([]);
+  const [cases, setCases] = useState<CaseResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.cases.list()
       .then(res => {
-        setCases(res.cases);
+        setCases(res.items || res.cases || []);
         setLoading(false);
       })
       .catch(err => {
@@ -73,7 +73,7 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-gray-800">
                   {cases.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-800/50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-200">{c.file_name}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-200">{c.filename || c.file_name || 'Unnamed'}</td>
                       <td className="px-6 py-4"><StatusBadge status={c.status} /></td>
                       <td className="px-6 py-4 text-sm text-gray-400">{new Date(c.created_at).toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">

@@ -1,31 +1,39 @@
-export enum Severity {
-  INFO = 'info',
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical',
-}
+export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
-export enum IndicatorKind {
-  IP = 'ip',
-  DOMAIN = 'domain',
-  URL = 'url',
-  EMAIL = 'email',
-  FILE_HASH = 'file_hash',
-  KEYWORD = 'keyword',
-}
+export const Severity = {
+  INFO: 'info' as Severity,
+  LOW: 'low' as Severity,
+  MEDIUM: 'medium' as Severity,
+  HIGH: 'high' as Severity,
+  CRITICAL: 'critical' as Severity,
+};
 
-export enum CaseStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-}
+export type IndicatorKind = 'email' | 'domain' | 'ip' | 'url' | 'hash' | 'qr_url' | 'case';
+
+export const IndicatorKind = {
+  EMAIL: 'email' as IndicatorKind,
+  DOMAIN: 'domain' as IndicatorKind,
+  IP: 'ip' as IndicatorKind,
+  URL: 'url' as IndicatorKind,
+  HASH: 'hash' as IndicatorKind,
+  QR_URL: 'qr_url' as IndicatorKind,
+  CASE: 'case' as IndicatorKind,
+};
+
+export type CaseStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export const CaseStatus = {
+  PENDING: 'pending' as CaseStatus,
+  PROCESSING: 'processing' as CaseStatus,
+  COMPLETED: 'completed' as CaseStatus,
+  FAILED: 'failed' as CaseStatus,
+};
 
 export interface AnalystResponse {
   id: string;
   email: string;
-  display_name: string;
+  display_name?: string | null;
+  is_active?: boolean;
 }
 
 export interface TokenResponse {
@@ -36,34 +44,44 @@ export interface TokenResponse {
 export interface CaseResponse {
   id: string;
   status: CaseStatus;
+  original_sha256: string;
+  original_size: number | null;
+  filename: string | null;
+  file_name?: string | null; // alias
   created_at: string;
+  updated_at?: string | null;
 }
 
-export interface CaseDetail {
-  id: string;
-  status: CaseStatus;
-  created_at: string;
-  updated_at: string | null;
-  file_name: string;
+export interface CaseDetail extends CaseResponse {
+  analyst_id: string;
+  metadata_json?: Record<string, any> | null;
 }
 
 export interface CaseListResponse {
-  cases: CaseDetail[];
+  items: CaseResponse[];
   total: number;
+  cases?: CaseResponse[]; // alias
 }
 
 export interface FindingResponse {
   id: string;
   case_id: string;
-  detector_name: string;
-  title: string;
-  description: string;
+  detector: string;
+  detector_name?: string; // alias
   severity: Severity;
+  title: string;
+  detail?: string | null;
+  description?: string | null; // alias
+  evidence_ref?: string | null;
   confidence: number;
+  raw_evidence?: Record<string, any> | null;
+  created_at: string;
 }
 
 export interface FindingListResponse {
-  findings: FindingResponse[];
+  items: FindingResponse[];
+  total: number;
+  findings?: FindingResponse[]; // alias
 }
 
 export interface IndicatorResponse {
@@ -71,29 +89,43 @@ export interface IndicatorResponse {
   case_id: string;
   kind: IndicatorKind;
   value: string;
-  severity: Severity;
-  tags: string[];
+  context?: string | null;
+  first_seen_at?: string | null;
 }
 
 export interface IndicatorListResponse {
-  indicators: IndicatorResponse[];
+  items: IndicatorResponse[];
+  total: number;
+  indicators?: IndicatorResponse[]; // alias
 }
 
 export interface GraphNode {
-  data: {
+  id: string;
+  kind: string;
+  value: string;
+  label: string;
+  risk_level: 'neutral' | 'suspicious' | 'malicious';
+  metadata?: Record<string, any>;
+  data?: {
     id: string;
     label: string;
-    kind?: IndicatorKind | 'case';
-    severity?: Severity;
+    kind?: string;
+    risk_level?: string;
   };
 }
 
 export interface GraphEdge {
-  data: {
+  id: string;
+  source: string;
+  target: string;
+  relationship: string;
+  label?: string | null;
+  data?: {
     id: string;
     source: string;
     target: string;
-    label: string;
+    relationship?: string;
+    label?: string;
   };
 }
 
@@ -103,16 +135,71 @@ export interface IndicatorGraphResponse {
 }
 
 export interface RiskScoreResponse {
-  case_id: string;
   score: number;
-  label: string;
   confidence: number;
+  coverage: number;
+  uncertainty_label: string;
+  is_heuristic: boolean;
+  summary: string;
 }
 
 export interface AnalysisStatusResponse {
+  case_id: string;
   status: CaseStatus;
-  progress: number;
-  message: string;
+  progress_pct?: number | null;
+}
+
+export interface AIAnalysisResponse {
+  executive_summary: string;
+  attack_vector: string;
+  threat_actor_tactics: string[];
+  recommended_actions: string[];
+  evidence_citations: string[];
+  is_grounded: boolean;
+  provider: string;
+}
+
+export interface GeoIPData {
+  ip: string;
+  country?: string | null;
+  city?: string | null;
+  asn?: string | null;
+  org?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  is_private: boolean;
+}
+
+export interface RouteHopEnrichment {
+  hop: number;
+  from_claimed?: string | null;
+  by_node?: string | null;
+  ip?: string | null;
+  geoip?: GeoIPData | null;
+  delay_seconds?: number | null;
+  delay_display?: string | null;
+  delay_anomaly?: string | null;
+  tls_version?: string | null;
+  cipher?: string | null;
+  timestamp_iso?: string | null;
+}
+
+export interface RouteAnalysisResponse {
+  hops: RouteHopEnrichment[];
+  total_transit_seconds?: number | null;
+  total_transit_display?: string | null;
+  anomalies: string[];
+}
+
+export interface QrCodeResult {
+  attachment_name: string;
+  decoded_text: string;
+  defanged_text: string;
+  is_url: boolean;
+}
+
+export interface QrCodeListResponse {
+  qr_codes: QrCodeResult[];
 }
 
 export interface ReportResponse {
@@ -171,4 +258,3 @@ export interface ParsedEmailResponse {
   received_chain_json?: ReceivedHop[] | null;
   parsed_at: string;
 }
-

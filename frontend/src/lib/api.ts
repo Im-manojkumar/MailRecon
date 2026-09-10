@@ -9,6 +9,10 @@ import {
   IndicatorGraphResponse,
   RiskScoreResponse,
   ReportListResponse,
+  AIAnalysisResponse,
+  RouteAnalysisResponse,
+  QrCodeResult,
+  ParsedEmailResponse,
 } from './types';
 
 class ApiClient {
@@ -100,15 +104,27 @@ class ApiClient {
       const res = await this.fetchAuth(`/api/cases/${id}/score`);
       return res.json();
     },
+    getAIAnalysis: async (id: string): Promise<AIAnalysisResponse> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/ai-analysis`);
+      return res.json();
+    },
+    getRoute: async (id: string): Promise<RouteAnalysisResponse> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/route`);
+      return res.json();
+    },
+    getQrCodes: async (id: string): Promise<QrCodeResult[]> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/qr-codes`);
+      return res.json();
+    },
     generateReport: async (id: string): Promise<void> => {
-      await this.fetchAuth(`/api/cases/${id}/reports`, { method: 'POST' });
+      await this.fetchAuth(`/api/cases/${id}/report`, { method: 'POST' });
     },
     getReports: async (id: string): Promise<ReportListResponse> => {
       const res = await this.fetchAuth(`/api/cases/${id}/reports`);
       return res.json();
     },
     downloadOriginal: async (id: string): Promise<Blob> => {
-      const res = await this.fetchAuth(`/api/cases/${id}/download`);
+      const res = await this.fetchAuth(`/api/cases/${id}/original`);
       return res.blob();
     }
   };
