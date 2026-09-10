@@ -8,6 +8,7 @@ import {
   IndicatorListResponse,
   IndicatorGraphResponse,
   RiskScoreResponse,
+  ReportResponse,
   ReportListResponse,
   AIAnalysisResponse,
   RouteAnalysisResponse,
@@ -116,12 +117,17 @@ class ApiClient {
       const res = await this.fetchAuth(`/api/cases/${id}/qr-codes`);
       return res.json();
     },
-    generateReport: async (id: string): Promise<void> => {
-      await this.fetchAuth(`/api/cases/${id}/report`, { method: 'POST' });
+    generateReport: async (id: string, format: 'html' | 'json' = 'html'): Promise<ReportResponse> => {
+      const res = await this.fetchAuth(`/api/cases/${id}/report?format=${format}`, { method: 'POST' });
+      return res.json();
     },
     getReports: async (id: string): Promise<ReportListResponse> => {
       const res = await this.fetchAuth(`/api/cases/${id}/reports`);
       return res.json();
+    },
+    downloadReport: async (caseId: string, reportId: string): Promise<Blob> => {
+      const res = await this.fetchAuth(`/api/cases/${caseId}/reports/${reportId}`);
+      return res.blob();
     },
     downloadOriginal: async (id: string): Promise<Blob> => {
       const res = await this.fetchAuth(`/api/cases/${id}/original`);

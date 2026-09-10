@@ -12,6 +12,7 @@ import {
   QrCodeResult,
   AIAnalysisResponse,
   IndicatorGraphResponse,
+  ReportResponse,
 } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import SeverityBadge from '@/components/SeverityBadge';
@@ -34,6 +35,9 @@ import {
   Bot,
   FileCode,
   CheckCircle,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 
 export default function CaseDetailPage({ params }: { params: { id: string } }) {
@@ -46,8 +50,11 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const [qrCodes, setQrCodes] = useState<QrCodeResult[]>([]);
   const [aiData, setAiData] = useState<AIAnalysisResponse | null>(null);
   const [graph, setGraph] = useState<IndicatorGraphResponse | null>(null);
+  const [reports, setReports] = useState<ReportResponse[]>([]);
+  const [generatingFormat, setGeneratingFormat] = useState<'html' | 'json' | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.allSettled([
@@ -59,12 +66,12 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       api.cases.getQrCodes(params.id),
       api.cases.getAIAnalysis(params.id),
       api.cases.getGraph(params.id),
-    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes]) => {
+      api.cases.getReports(params.id),
+    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes, reportsRes]) => {
       if (caseRes.status === 'fulfilled') setCaseData(caseRes.value);
       if (scoreRes.status === 'fulfilled') setScore(scoreRes.value);
       if (findingsRes.status === 'fulfilled') {
         const fList = findingsRes.value.items || findingsRes.value.findings || [];
-        // Sort findings by severity (critical -> high -> medium -> low -> info)
         const sevOrder: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
         fList.sort((a, b) => (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0));
         setFindings(fList);
@@ -77,6 +84,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       }
       if (aiRes.status === 'fulfilled') setAiData(aiRes.value);
       if (graphRes.status === 'fulfilled') setGraph(graphRes.value);
+      if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.items || reportsRes.value.reports || []);
       setLoading(false);
     });
   }, [params.id]);
@@ -372,35 +380,176 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
           {/* TAB 7: FORENSIC REPORT */}
           {activeTab === 'report' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between p-4 bg-gray-900/60 border border-gray-800 rounded-lg">
+              {/* Generation Actions Card */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-gray-900/80 border border-gray-800 rounded-lg gap-4">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-200">
                     Forensic Intelligence Report Export
                   </h3>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Generate an immutable, SHA-256 signed forensic report suitable for incident documentation.
+                    Generate an immutable, SHA-256 signed forensic report suitable for incident documentation and compliance.
                   </p>
                 </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      await api.cases.generateReport(caseData.id);
-                      alert('Report generation initiated!');
-                    } catch (e) {
-                      alert('Report generation endpoint ready for Phase 9 integration.');
-                    }
-                  }}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-md transition-colors"
-                >
-                  Generate Forensic Report
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={async () => {
+                      if (!caseData) return;
+                      try {
+                        setGeneratingFormat('html');
+                        const rep = await api.cases.generateReport(caseData.id, 'html');
+                        setReports((prev) => [rep, ...prev]);
+                      } catch (err: any) {
+                        alert('Failed to generate report: ' + (err.message || 'Unknown error'));
+                      } finally {
+                        setGeneratingFormat(null);
+                      }
+                    }}
+                    disabled={generatingFormat !== null}
+                    className="flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <FileCode className="w-4 h-4" />
+                    <span>{generatingFormat === 'html' ? 'Sealing HTML...' : 'Export HTML'}</span>
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (!caseData) return;
+                      try {
+                        setGeneratingFormat('json');
+                        const rep = await api.cases.generateReport(caseData.id, 'json');
+                        setReports((prev) => [rep, ...prev]);
+                      } catch (err: any) {
+                        alert('Failed to generate report: ' + (err.message || 'Unknown error'));
+                      } finally {
+                        setGeneratingFormat(null);
+                      }
+                    }}
+                    disabled={generatingFormat !== null}
+                    className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md transition-colors disabled:opacity-50"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>{generatingFormat === 'json' ? 'Sealing JSON...' : 'Export JSON'}</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="p-8 text-center text-gray-500 border border-dashed border-gray-800 rounded-lg space-y-2">
-                <FileCode className="w-8 h-8 mx-auto opacity-40" />
-                <p className="text-xs">
-                  Full multi-format report generation (HTML & JSON) with cryptographic integrity hashes is configured for Phase 9.
-                </p>
+              {/* Generated Reports List */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                    Generated Forensic Reports ({reports.length})
+                  </h4>
+                  <span className="text-[11px] text-gray-500">
+                    Protected by runtime SHA-256 tamper verification
+                  </span>
+                </div>
+
+                {reports.length === 0 ? (
+                  <div className="p-10 text-center text-gray-500 border border-dashed border-gray-800 rounded-lg space-y-2">
+                    <FileCode className="w-8 h-8 mx-auto opacity-40" />
+                    <p className="text-xs">
+                      No reports generated yet. Click &quot;Export HTML&quot; or &quot;Export JSON&quot; above to create an immutable forensic report.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {reports.map((rep) => (
+                      <div
+                        key={rep.id}
+                        className="p-4 bg-gray-900/70 border border-gray-800 rounded-lg space-y-3 hover:border-gray-700 transition-colors"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-2">
+                          <div className="flex items-center space-x-2.5">
+                            <span
+                              className={`px-2 py-0.5 text-[11px] font-mono font-bold uppercase rounded border ${
+                                rep.format === 'html'
+                                  ? 'bg-indigo-950 text-indigo-300 border-indigo-700'
+                                  : 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                              }`}
+                            >
+                              {rep.format}
+                            </span>
+                            <span className="text-xs font-mono text-gray-300">
+                              Report ID: {rep.id}
+                            </span>
+                          </div>
+
+                          <span className="text-xs text-gray-500 font-mono">
+                            {new Date(rep.created_at).toUTCString()}
+                          </span>
+                        </div>
+
+                        {/* Integrity Checksum Banner */}
+                        <div className="flex flex-wrap items-center justify-between bg-gray-950 p-2.5 rounded border border-gray-800 text-xs font-mono gap-2">
+                          <div className="flex items-center space-x-2 text-gray-400">
+                            <Shield className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                            <span>SHA-256 Seal:</span>
+                            <span className="text-cyan-300 break-all">{rep.integrity_sha256 || 'None'}</span>
+                          </div>
+
+                          {rep.integrity_sha256 && (
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(rep.integrity_sha256!);
+                                setCopiedHash(rep.id);
+                                setTimeout(() => setCopiedHash(null), 2000);
+                              }}
+                              className="p-1 hover:text-white text-gray-400 rounded hover:bg-gray-800 transition-colors"
+                              title="Copy SHA-256 hash"
+                            >
+                              {copiedHash === rep.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end space-x-2 pt-1">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const blob = await api.cases.downloadReport(caseData.id, rep.id);
+                                const url = window.URL.createObjectURL(blob);
+                                window.open(url, '_blank');
+                              } catch (err) {
+                                alert('Failed to open report.');
+                              }
+                            }}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium rounded border border-gray-700 transition-colors"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Preview</span>
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              try {
+                                const blob = await api.cases.downloadReport(caseData.id, rep.id);
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `case_${caseData.id}_report_${rep.id.substring(0, 8)}.${rep.format}`;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
+                              } catch (err) {
+                                alert('Failed to download report. Tamper verification failed.');
+                              }
+                            }}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-950/80 hover:bg-indigo-900/80 text-indigo-200 text-xs font-medium rounded border border-indigo-700/80 transition-colors"
+                          >
+                            <Download className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Download Sealed File</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

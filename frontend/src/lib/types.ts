@@ -205,13 +205,15 @@ export interface QrCodeListResponse {
 export interface ReportResponse {
   id: string;
   case_id: string;
-  content: string;
   format: string;
+  integrity_sha256?: string | null;
   created_at: string;
 }
 
 export interface ReportListResponse {
-  reports: ReportResponse[];
+  items: ReportResponse[];
+  total: number;
+  reports?: ReportResponse[];
 }
 
 export interface AttachmentInfo {

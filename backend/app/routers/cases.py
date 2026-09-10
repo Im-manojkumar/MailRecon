@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,11 +14,14 @@ from app.models.case import Case, CaseStatus
 from app.models.finding import Finding
 from app.models.indicator import Indicator
 from app.models.parsed_email import ParsedEmail
+from app.models.report import Report, ReportFormat
+from app.reporting.generator import ForensicReportGenerator
 from app.schemas.analysis import AIAnalysisResponse, RiskScoreResponse
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
 from app.schemas.finding import FindingListResponse
 from app.schemas.indicator import IndicatorGraphResponse, IndicatorListResponse
 from app.schemas.parsed_email import ParsedEmailResponse
+from app.schemas.report import ReportListResponse, ReportResponse
 from app.storage.base import EvidenceStore
 from app.storage.deps import get_evidence_store
 from app.tasks.queue import enqueue_case_analysis
@@ -258,24 +261,67 @@ async def get_case_qr_codes(
     return metadata.get("qr_codes", [])
 
 
-@router.post("/{id}/report", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{id}/report", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
 async def generate_report(
     id: uuid.UUID,
+    format: ReportFormat = Query(default=ReportFormat.html),
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
+    storage: EvidenceStore = Depends(get_evidence_store),
 ):
-    await get_case_or_404(id, analyst_id, db)
-    return {"message": "Report generation started"}
+    case = await get_case_or_404(id, analyst_id, db)
+
+    # 1. Fetch parsed email structure if available
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    # 2. Fetch all detection findings
+    findings_res = await db.execute(
+        select(Finding).where(Finding.case_id == id).order_by(Finding.created_at.desc())
+    )
+    findings = findings_res.scalars().all()
+
+    # 3. Generate structured forensic report
+    if format == ReportFormat.json:
+        report_bytes, sha256_hash = ForensicReportGenerator.generate_json_report(
+            case, parsed, findings, case.metadata_json
+        )
+    else:
+        report_bytes, sha256_hash = ForensicReportGenerator.generate_html_report(
+            case, parsed, findings, case.metadata_json
+        )
+
+    # 4. Save report in evidence storage
+    report_id = uuid.uuid4()
+    storage_key = f"reports/{case.id}/{report_id}.{format.value}"
+    await storage.put(storage_key, report_bytes)
+
+    # 5. Record report in PostgreSQL database
+    db_report = Report(
+        id=report_id,
+        case_id=case.id,
+        format=format,
+        storage_key=storage_key,
+        integrity_sha256=sha256_hash,
+    )
+    db.add(db_report)
+    await db.commit()
+    await db.refresh(db_report)
+
+    return db_report
 
 
-@router.get("/{id}/reports")
+@router.get("/{id}/reports", response_model=ReportListResponse)
 async def list_reports(
     id: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
     await get_case_or_404(id, analyst_id, db)
-    return []
+    stmt = select(Report).where(Report.case_id == id).order_by(Report.created_at.desc())
+    res = await db.execute(stmt)
+    reports = res.scalars().all()
+    return ReportListResponse(items=list(reports), total=len(reports))
 
 
 @router.get("/{id}/reports/{rid}")
@@ -284,9 +330,34 @@ async def download_report(
     rid: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
+    storage: EvidenceStore = Depends(get_evidence_store),
 ):
-    await get_case_or_404(id, analyst_id, db)
-    raise HTTPException(status_code=404, detail="Report not found")
+    case = await get_case_or_404(id, analyst_id, db)
+    stmt = select(Report).where(Report.case_id == id, Report.id == rid)
+    res = await db.execute(stmt)
+    report = res.scalars().first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if not await storage.exists(report.storage_key):
+        raise HTTPException(status_code=404, detail="Report file missing from evidence storage")
+
+    content = await storage.get(report.storage_key)
+
+    # Runtime cryptographic tamper verification
+    calculated_sha = hashlib.sha256(content).hexdigest()
+    if report.integrity_sha256 and calculated_sha != report.integrity_sha256:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Report evidence tampering detected: cryptographic SHA-256 mismatch",
+        )
+
+    media_type = "text/html; charset=utf-8" if report.format == ReportFormat.html else "application/json"
+    headers = {
+        "X-Report-SHA256": calculated_sha,
+        "Content-Disposition": f'inline; filename="case_{case.id}_report_{report.id}.{report.format.value}"',
+    }
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 @router.get("/{id}/original")
