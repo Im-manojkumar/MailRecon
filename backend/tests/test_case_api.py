@@ -5,7 +5,9 @@ from httpx import AsyncClient
 
 from app.config import settings
 from app.storage.deps import get_evidence_store
-from tests.conftest import fixture_path, TEST_ANALYST_ID, OTHER_ANALYST_ID
+from app.tasks.jobs import _async_process_case
+import app.tasks.jobs as jobs_module
+from tests.conftest import fixture_path, TEST_ANALYST_ID, OTHER_ANALYST_ID, get_test_session_factory
 
 
 @pytest.mark.asyncio
@@ -134,3 +136,88 @@ async def test_access_other_analyst_case(async_client: AsyncClient, auth_headers
     random_id = str(uuid.uuid4())
     response = await async_client.get(f"/api/cases/{random_id}", headers=auth_headers)
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_parsed_email_lifecycle(async_client: AsyncClient, auth_headers):
+    """Test parsed endpoint returns 404 before processing, and 200 with full data after processing."""
+    from app.main import app
+    session_factory = get_test_session_factory()
+    store = app.dependency_overrides[get_evidence_store]()
+
+    # 1. Upload case
+    file_path = fixture_path("clean_simple.eml")
+    files = {"file": ("clean_simple.eml", file_path.read_bytes(), "message/rfc822")}
+    create_res = await async_client.post("/api/cases", files=files, headers=auth_headers)
+    case_id = create_res.json()["id"]
+
+    # 2. Before parsing, should return 404
+    parsed_res = await async_client.get(f"/api/cases/{case_id}/parsed", headers=auth_headers)
+    assert parsed_res.status_code == 404
+
+    # 3. Execute worker processing job
+    orig_factory = jobs_module.async_session_maker
+    orig_store_getter = jobs_module.get_evidence_store
+    jobs_module.async_session_maker = session_factory
+    jobs_module.get_evidence_store = lambda: store
+
+    try:
+        success = await _async_process_case(uuid.UUID(case_id))
+        assert success is True
+    finally:
+        jobs_module.async_session_maker = orig_factory
+        jobs_module.get_evidence_store = orig_store_getter
+
+    # 4. After parsing, should return 200 with complete parse details
+    parsed_res = await async_client.get(f"/api/cases/{case_id}/parsed", headers=auth_headers)
+    assert parsed_res.status_code == 200
+    data = parsed_res.json()
+    assert data["case_id"] == case_id
+    assert "Meeting Tomorrow" in data["headers_json"]["subject"]
+    assert "Are we still on for the meeting tomorrow?" in data["body_text"]
+    assert data["auth_results_json"]["spf"]["result"] == "pass"
+    assert len(data["received_chain_json"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_attachment_download_lifecycle(async_client: AsyncClient, auth_headers):
+    """Test that attachments parsed from an email can be safely downloaded by hash."""
+    from app.main import app
+    session_factory = get_test_session_factory()
+    store = app.dependency_overrides[get_evidence_store]()
+
+    # 1. Upload email with macro attachment
+    file_path = fixture_path("attachment_macro.eml")
+    files = {"file": ("attachment_macro.eml", file_path.read_bytes(), "message/rfc822")}
+    create_res = await async_client.post("/api/cases", files=files, headers=auth_headers)
+    case_id = create_res.json()["id"]
+
+    # 2. Process case
+    orig_factory = jobs_module.async_session_maker
+    orig_store_getter = jobs_module.get_evidence_store
+    jobs_module.async_session_maker = session_factory
+    jobs_module.get_evidence_store = lambda: store
+
+    try:
+        await _async_process_case(uuid.UUID(case_id))
+    finally:
+        jobs_module.async_session_maker = orig_factory
+        jobs_module.get_evidence_store = orig_store_getter
+
+    # 3. Retrieve parsed attachments
+    parsed_res = await async_client.get(f"/api/cases/{case_id}/parsed", headers=auth_headers)
+    attachments = parsed_res.json()["attachments_json"]
+    assert len(attachments) == 1
+    att = attachments[0]
+    att_sha256 = att["sha256"]
+
+    # 4. Download attachment
+    att_res = await async_client.get(f"/api/cases/{case_id}/attachments/{att_sha256}", headers=auth_headers)
+    assert att_res.status_code == 200
+    assert att_res.headers["content-type"] == "application/octet-stream"
+    assert "invoice_2024.xlsm" in att_res.headers["content-disposition"]
+    assert att_res.headers["x-attachment-sha256"] == att_sha256
+
+    # 5. Nonexistent attachment returns 404
+    bad_res = await async_client.get(f"/api/cases/{case_id}/attachments/badhash", headers=auth_headers)
+    assert bad_res.status_code == 404

@@ -50,7 +50,7 @@ async def test_process_case_job_success():
         async with session_factory() as session:
             res = await session.execute(select(Case).where(Case.id == case_id))
             updated_case = res.scalars().first()
-            assert updated_case.status == CaseStatus.processing
+            assert updated_case.status == CaseStatus.completed
     finally:
         jobs_module.async_session_maker = orig_factory
         jobs_module.get_evidence_store = orig_store_getter

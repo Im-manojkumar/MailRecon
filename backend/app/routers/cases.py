@@ -11,8 +11,10 @@ from app.auth import get_current_analyst
 from app.config import settings
 from app.database import get_db
 from app.models.case import Case, CaseStatus
+from app.models.parsed_email import ParsedEmail
 from app.schemas.analysis import RiskScoreResponse
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
+from app.schemas.parsed_email import ParsedEmailResponse
 from app.storage.base import EvidenceStore
 from app.storage.deps import get_evidence_store
 from app.tasks.queue import enqueue_case_analysis
@@ -95,14 +97,57 @@ async def get_case(
     return case
 
 
-@router.get("/{id}/parsed")
+@router.get("/{id}/parsed", response_model=ParsedEmailResponse)
 async def get_parsed_email(
     id: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    await get_case_or_404(id, analyst_id, db)
-    raise HTTPException(status_code=404, detail="Not yet parsed")
+    case = await get_case_or_404(id, analyst_id, db)
+    result = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == case.id))
+    parsed_email = result.scalars().first()
+    if not parsed_email:
+        raise HTTPException(status_code=404, detail="Email has not been parsed yet")
+    return parsed_email
+
+
+@router.get("/{id}/attachments/{sha256}")
+async def get_attachment_file(
+    id: uuid.UUID,
+    sha256: str,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+    storage: EvidenceStore = Depends(get_evidence_store),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+
+    result = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == case.id))
+    parsed = result.scalars().first()
+    if not parsed or not parsed.attachments_json:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    attachment_entry = None
+    for att in parsed.attachments_json:
+        if att.get("sha256") == sha256:
+            attachment_entry = att
+            break
+
+    if not attachment_entry:
+        raise HTTPException(status_code=404, detail="Attachment not found in case")
+
+    storage_key = attachment_entry.get("storage_key") or f"cases/{case.original_sha256}/attachments/{sha256}"
+    if not await storage.exists(storage_key):
+        raise HTTPException(status_code=404, detail="Attachment file not found in storage")
+
+    stream = storage.get_stream(storage_key)
+    safe_filename = attachment_entry.get("filename", "attachment.bin").replace('"', '\\"')
+    headers = {
+        # Never trust declared MIME to avoid browser script execution (Security requirement)
+        "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        "X-Attachment-SHA256": sha256,
+        "X-Content-Type-Options": "nosniff",
+    }
+    return StreamingResponse(stream, media_type="application/octet-stream", headers=headers)
 
 
 @router.get("/{id}/findings")

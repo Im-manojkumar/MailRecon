@@ -39,14 +39,10 @@ class ApiClient {
 
   auth = {
     login: async (email: string, password: string): Promise<TokenResponse> => {
-      const formData = new URLSearchParams();
-      formData.append('username', email); // OAuth2 password flow typically uses 'username'
-      formData.append('password', password);
-      
-      const res = await fetch(`${this.baseUrl}/api/auth/token`, {
+      const res = await fetch(`${this.baseUrl}/api/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
       if (!res.ok) throw new Error('Login failed');
       return res.json();
@@ -70,7 +66,7 @@ class ApiClient {
     upload: async (file: File): Promise<CaseResponse> => {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await this.fetchAuth('/api/cases/upload', {
+      const res = await this.fetchAuth('/api/cases', {
         method: 'POST',
         body: formData,
       });
@@ -84,7 +80,7 @@ class ApiClient {
       const res = await this.fetchAuth(`/api/cases/${id}`);
       return res.json();
     },
-    getParsed: async (id: string): Promise<any> => {
+    getParsed: async (id: string): Promise<ParsedEmailResponse> => {
       const res = await this.fetchAuth(`/api/cases/${id}/parsed`);
       return res.json();
     },

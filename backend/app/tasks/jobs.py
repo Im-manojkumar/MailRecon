@@ -6,13 +6,15 @@ from sqlalchemy import select
 
 from app.database import async_session_maker
 from app.models.case import Case, CaseStatus
+from app.models.parsed_email import ParsedEmail
+from app.parser.email_parser import EmailParser
 from app.storage.deps import get_evidence_store
 
 logger = logging.getLogger(__name__)
 
 
 async def _async_process_case(case_id: uuid.UUID) -> bool:
-    """Async implementation of case ingestion and integrity verification."""
+    """Async implementation of case ingestion, verification, and email parsing."""
     storage = get_evidence_store()
     
     async with async_session_maker() as session:
@@ -27,7 +29,7 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         await session.commit()
         await session.refresh(case)
 
-        # Verify evidence existence and SHA-256 integrity
+        # 1. Verify evidence existence and SHA-256 integrity
         if not await storage.exists(case.storage_key):
             logger.error(f"Evidence file {case.storage_key} missing for case {case_id}")
             case.status = CaseStatus.failed
@@ -43,9 +45,54 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
             await session.commit()
             return False
 
-        logger.info(f"Case {case_id} evidence verified (SHA-256: {case.original_sha256}). Ready for parser.")
-        # In Phase 1, the evidence is successfully ingested and verified.
-        # Future phases will run the parser, detectors, and scoring here.
+        logger.info(f"Case {case_id} evidence verified (SHA-256: {case.original_sha256}). Parsing email...")
+
+        # 2. Read raw evidence and parse email structure
+        raw_bytes = await storage.get(case.storage_key)
+        parsed_result = EmailParser.parse(raw_bytes)
+
+        # 3. Store attachments safely in evidence store
+        attachments_json = []
+        for att in parsed_result.attachments:
+            att_storage_key = f"cases/{case.original_sha256}/attachments/{att.sha256}"
+            if att.raw_bytes:
+                await storage.put(att_storage_key, att.raw_bytes)
+            att.storage_key = att_storage_key
+
+            attachments_json.append({
+                "filename": att.filename,
+                "content_type": att.content_type,
+                "size": att.size,
+                "sha256": att.sha256,
+                "is_macro": att.is_macro,
+                "is_inline": att.is_inline,
+                "content_id": att.content_id,
+                "storage_key": att.storage_key,
+            })
+
+        # 4. Save ParsedEmail record to database
+        pe_res = await session.execute(select(ParsedEmail).where(ParsedEmail.case_id == case.id))
+        parsed_record = pe_res.scalars().first()
+        if not parsed_record:
+            parsed_record = ParsedEmail(case_id=case.id)
+            session.add(parsed_record)
+
+        parsed_record.headers_json = parsed_result.headers
+        parsed_record.body_text = parsed_result.body_text
+        parsed_record.body_html = parsed_result.body_html
+        parsed_record.attachments_json = attachments_json
+        parsed_record.urls_json = parsed_result.urls
+        parsed_record.auth_results_json = parsed_result.auth_results
+        parsed_record.received_chain_json = parsed_result.received_chain
+
+        # 5. Transition status to completed
+        case.status = CaseStatus.completed
+        if parsed_result.mime_depth_exceeded:
+            case.metadata_json = (case.metadata_json or {})
+            case.metadata_json["warning"] = "MIME depth exceeded maximum allowed limit"
+
+        await session.commit()
+        logger.info(f"Case {case_id} successfully parsed and persisted.")
         return True
 
 
