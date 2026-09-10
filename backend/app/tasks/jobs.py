@@ -113,16 +113,32 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         except Exception as e:
             logger.warning(f"Failed to generate AI analysis for case {case_id}: {e}")
 
+        # 7. Compute multi-dimensional risk score, confidence, and coverage
+        from app.scoring import RiskScoringEngine
+        try:
+            score_result = RiskScoringEngine.compute_score(parsed_result, findings_data)
+            current_metadata["risk_score"] = {
+                "score": score_result.score,
+                "confidence": score_result.confidence,
+                "coverage": score_result.coverage,
+                "uncertainty_label": score_result.uncertainty_label,
+                "is_heuristic": True,
+                "summary": score_result.summary,
+                "breakdown": score_result.breakdown,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to compute risk score for case {case_id}: {e}")
+
         if parsed_result.mime_depth_exceeded:
             current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
 
         case.metadata_json = current_metadata
 
-        # 7. Transition status to completed
+        # 8. Transition status to completed
         case.status = CaseStatus.completed
 
         await session.commit()
-        logger.info(f"Case {case_id} processed: parsed structure stored, {len(findings_data)} findings, and AI briefing generated.")
+        logger.info(f"Case {case_id} processed: parsed structure stored, {len(findings_data)} findings, AI briefing, and risk score computed.")
         return True
 
 

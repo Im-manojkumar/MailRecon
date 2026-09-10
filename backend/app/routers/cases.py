@@ -190,7 +190,12 @@ async def get_risk_score(
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    await get_case_or_404(id, analyst_id, db)
+    case = await get_case_or_404(id, analyst_id, db)
+    metadata = case.metadata_json or {}
+    score_data = metadata.get("risk_score")
+    if score_data:
+        return score_data
+
     return {
         "score": 0.0,
         "confidence": 0.0,
