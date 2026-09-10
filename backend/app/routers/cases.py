@@ -12,10 +12,12 @@ from app.config import settings
 from app.database import get_db
 from app.models.case import Case, CaseStatus
 from app.models.finding import Finding
+from app.models.indicator import Indicator
 from app.models.parsed_email import ParsedEmail
 from app.schemas.analysis import AIAnalysisResponse, RiskScoreResponse
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
 from app.schemas.finding import FindingListResponse
+from app.schemas.indicator import IndicatorGraphResponse, IndicatorListResponse
 from app.schemas.parsed_email import ParsedEmailResponse
 from app.storage.base import EvidenceStore
 from app.storage.deps import get_evidence_store
@@ -164,23 +166,31 @@ async def get_findings(
     return {"items": items, "total": len(items)}
 
 
-@router.get("/{id}/indicators")
+@router.get("/{id}/indicators", response_model=IndicatorListResponse)
 async def get_indicators(
     id: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    await get_case_or_404(id, analyst_id, db)
-    return []
+    case = await get_case_or_404(id, analyst_id, db)
+    result = await db.execute(
+        select(Indicator).where(Indicator.case_id == case.id).order_by(Indicator.first_seen_at)
+    )
+    items = result.scalars().all()
+    return {"items": items, "total": len(items)}
 
 
-@router.get("/{id}/graph")
+@router.get("/{id}/graph", response_model=IndicatorGraphResponse)
 async def get_indicator_graph(
     id: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    await get_case_or_404(id, analyst_id, db)
+    case = await get_case_or_404(id, analyst_id, db)
+    metadata = case.metadata_json or {}
+    graph_data = metadata.get("indicator_graph")
+    if graph_data:
+        return graph_data
     return {"nodes": [], "edges": []}
 
 

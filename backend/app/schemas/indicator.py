@@ -23,11 +23,17 @@ class GraphNode(BaseModel):
     kind: str
     value: str
     label: str
+    risk_level: Optional[str] = "neutral"
+    metadata: Optional[dict] = None
+
 
 class GraphEdge(BaseModel):
+    id: Optional[str] = None
     source: str
     target: str
     relationship: str
+    label: Optional[str] = None
+
 
 class IndicatorGraphResponse(BaseModel):
     nodes: list[GraphNode]

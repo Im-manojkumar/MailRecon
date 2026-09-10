@@ -29,7 +29,7 @@ class NeuralSequenceDetector(BaseDetector):
             return findings
 
         # Combine subject and body text for linguistic sequence analysis
-        subject = parsed.headers.get("Subject", "")
+        subject = parsed.headers.get("subject") or parsed.headers.get("Subject") or ""
         body = parsed.body_text or ""
         text = f"{subject}\n\n{body}".strip()
 

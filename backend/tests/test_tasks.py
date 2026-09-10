@@ -57,6 +57,17 @@ async def test_process_case_job_success():
             assert "executive_summary" in ai_data
             assert "attack_vector" in ai_data
             assert ai_data["is_grounded"] is True
+            assert "risk_score" in updated_case.metadata_json
+            assert "route_analysis" in updated_case.metadata_json
+            assert "indicator_graph" in updated_case.metadata_json
+            graph_data = updated_case.metadata_json["indicator_graph"]
+            assert len(graph_data["nodes"]) > 0
+
+            # Verify indicators were persisted to the database
+            from app.models.indicator import Indicator
+            ind_res = await session.execute(select(Indicator).where(Indicator.case_id == case_id))
+            db_inds = ind_res.scalars().all()
+            assert len(db_inds) > 0
     finally:
         jobs_module.async_session_maker = orig_factory
         jobs_module.get_evidence_store = orig_store_getter

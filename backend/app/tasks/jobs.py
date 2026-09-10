@@ -139,18 +139,32 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
 
         # 9. Quishing inspection (QR Code matrix decoding)
         from app.enrichment.qr_decoder import QrCodeDecoder
+        qr_list: list = []
         try:
             qr_codes = QrCodeDecoder.inspect_attachments(parsed_result.attachments)
-            current_metadata["qr_codes"] = [q.to_dict() for q in qr_codes]
+            qr_list = [q.to_dict() for q in qr_codes]
+            current_metadata["qr_codes"] = qr_list
         except Exception as e:
             logger.warning(f"Failed to inspect QR codes for case {case_id}: {e}")
+
+        # 10. Extract indicators for DB persistence and build Cytoscape.js indicator graph
+        from app.graph.builder import IndicatorGraphBuilder
+        try:
+            db_indicators = IndicatorGraphBuilder.extract_indicators(case.id, parsed_result, qr_list)
+            for ind in db_indicators:
+                session.add(ind)
+
+            graph = IndicatorGraphBuilder.build_graph(case.id, parsed_result, findings_data, qr_list)
+            current_metadata["indicator_graph"] = graph.model_dump()
+        except Exception as e:
+            logger.warning(f"Failed to build indicator graph for case {case_id}: {e}")
 
         if parsed_result.mime_depth_exceeded:
             current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
 
         case.metadata_json = current_metadata
 
-        # 8. Transition status to completed
+        # 11. Transition status to completed
         case.status = CaseStatus.completed
 
         await session.commit()
