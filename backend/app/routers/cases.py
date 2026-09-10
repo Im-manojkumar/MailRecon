@@ -11,9 +11,11 @@ from app.auth import get_current_analyst
 from app.config import settings
 from app.database import get_db
 from app.models.case import Case, CaseStatus
+from app.models.finding import Finding
 from app.models.parsed_email import ParsedEmail
 from app.schemas.analysis import RiskScoreResponse
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
+from app.schemas.finding import FindingListResponse
 from app.schemas.parsed_email import ParsedEmailResponse
 from app.storage.base import EvidenceStore
 from app.storage.deps import get_evidence_store
@@ -150,14 +152,16 @@ async def get_attachment_file(
     return StreamingResponse(stream, media_type="application/octet-stream", headers=headers)
 
 
-@router.get("/{id}/findings")
+@router.get("/{id}/findings", response_model=FindingListResponse)
 async def get_findings(
     id: uuid.UUID,
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    await get_case_or_404(id, analyst_id, db)
-    return []
+    case = await get_case_or_404(id, analyst_id, db)
+    result = await db.execute(select(Finding).where(Finding.case_id == case.id).order_by(Finding.created_at))
+    items = result.scalars().all()
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/{id}/indicators")

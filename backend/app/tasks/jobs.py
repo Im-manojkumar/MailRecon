@@ -85,14 +85,32 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         parsed_record.auth_results_json = parsed_result.auth_results
         parsed_record.received_chain_json = parsed_result.received_chain
 
-        # 5. Transition status to completed
+        # 5. Run deterministic security detectors and persist findings
+        from app.detectors import run_all_detectors
+        from app.models.finding import Finding
+        
+        findings_data = run_all_detectors(parsed_result)
+        for fd in findings_data:
+            finding_record = Finding(
+                case_id=case.id,
+                detector=fd.detector,
+                severity=fd.severity,
+                title=fd.title,
+                detail=fd.detail,
+                evidence_ref=fd.evidence_ref,
+                confidence=fd.confidence,
+                raw_evidence=fd.raw_evidence,
+            )
+            session.add(finding_record)
+
+        # 6. Transition status to completed
         case.status = CaseStatus.completed
         if parsed_result.mime_depth_exceeded:
             case.metadata_json = (case.metadata_json or {})
             case.metadata_json["warning"] = "MIME depth exceeded maximum allowed limit"
 
         await session.commit()
-        logger.info(f"Case {case_id} successfully parsed and persisted.")
+        logger.info(f"Case {case_id} processed: parsed structure stored and {len(findings_data)} findings generated.")
         return True
 
 

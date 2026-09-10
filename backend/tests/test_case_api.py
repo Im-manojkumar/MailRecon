@@ -221,3 +221,45 @@ async def test_attachment_download_lifecycle(async_client: AsyncClient, auth_hea
     # 5. Nonexistent attachment returns 404
     bad_res = await async_client.get(f"/api/cases/{case_id}/attachments/badhash", headers=auth_headers)
     assert bad_res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_findings_lifecycle(async_client: AsyncClient, auth_headers):
+    """Test that findings are generated during processing and queryable via the API."""
+    from app.main import app
+    session_factory = get_test_session_factory()
+    store = app.dependency_overrides[get_evidence_store]()
+
+    # 1. Upload BEC case
+    file_path = fixture_path("bec_urgent.eml")
+    files = {"file": ("bec_urgent.eml", file_path.read_bytes(), "message/rfc822")}
+    create_res = await async_client.post("/api/cases", files=files, headers=auth_headers)
+    case_id = create_res.json()["id"]
+
+    # 2. Before processing, findings are empty
+    pre_res = await async_client.get(f"/api/cases/{case_id}/findings", headers=auth_headers)
+    assert pre_res.status_code == 200
+    assert pre_res.json()["total"] == 0
+
+    # 3. Process case
+    orig_factory = jobs_module.async_session_maker
+    orig_store_getter = jobs_module.get_evidence_store
+    jobs_module.async_session_maker = session_factory
+    jobs_module.get_evidence_store = lambda: store
+
+    try:
+        await _async_process_case(uuid.UUID(case_id))
+    finally:
+        jobs_module.async_session_maker = orig_factory
+        jobs_module.get_evidence_store = orig_store_getter
+
+    # 4. After processing, findings are populated
+    findings_res = await async_client.get(f"/api/cases/{case_id}/findings", headers=auth_headers)
+    assert findings_res.status_code == 200
+    data = findings_res.json()
+    assert data["total"] >= 2
+    detectors = [item["detector"] for item in data["items"]]
+    assert "identity_spoofing" in detectors
+    assert "bec_intent" in detectors
+    assert all(item["case_id"] == case_id for item in data["items"])
+
