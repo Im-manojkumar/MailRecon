@@ -111,3 +111,11 @@ def fixture_path(name: str) -> Path:
 def get_test_session_factory():
     """Access test db session factory for testing background jobs."""
     return _session_factory
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    """Async session for test assertions and direct DB interaction."""
+    async with _session_factory() as session:
+        yield session
+

@@ -51,6 +51,12 @@ async def test_process_case_job_success():
             res = await session.execute(select(Case).where(Case.id == case_id))
             updated_case = res.scalars().first()
             assert updated_case.status == CaseStatus.completed
+            assert updated_case.metadata_json is not None
+            assert "ai_analysis" in updated_case.metadata_json
+            ai_data = updated_case.metadata_json["ai_analysis"]
+            assert "executive_summary" in ai_data
+            assert "attack_vector" in ai_data
+            assert ai_data["is_grounded"] is True
     finally:
         jobs_module.async_session_maker = orig_factory
         jobs_module.get_evidence_store = orig_store_getter

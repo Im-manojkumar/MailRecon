@@ -14,3 +14,14 @@ class AnalysisStatusResponse(BaseModel):
     case_id: uuid.UUID
     status: str
     progress_pct: Optional[float] = None
+
+
+class AIAnalysisResponse(BaseModel):
+    executive_summary: str
+    attack_vector: str
+    threat_actor_tactics: list[str]
+    recommended_actions: list[str]
+    evidence_citations: list[str]
+    is_grounded: bool
+    provider: str
+

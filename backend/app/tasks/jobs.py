@@ -103,14 +103,26 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
             )
             session.add(finding_record)
 
-        # 6. Transition status to completed
-        case.status = CaseStatus.completed
+        # 6. Generate grounded AI forensic intelligence briefing
+        from app.ai import get_ai_provider
+        current_metadata = dict(case.metadata_json or {})
+        try:
+            ai_provider = get_ai_provider()
+            ai_analysis = await ai_provider.generate_analysis(parsed_result, findings_data)
+            current_metadata["ai_analysis"] = ai_analysis.model_dump()
+        except Exception as e:
+            logger.warning(f"Failed to generate AI analysis for case {case_id}: {e}")
+
         if parsed_result.mime_depth_exceeded:
-            case.metadata_json = (case.metadata_json or {})
-            case.metadata_json["warning"] = "MIME depth exceeded maximum allowed limit"
+            current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
+
+        case.metadata_json = current_metadata
+
+        # 7. Transition status to completed
+        case.status = CaseStatus.completed
 
         await session.commit()
-        logger.info(f"Case {case_id} processed: parsed structure stored and {len(findings_data)} findings generated.")
+        logger.info(f"Case {case_id} processed: parsed structure stored, {len(findings_data)} findings, and AI briefing generated.")
         return True
 
 

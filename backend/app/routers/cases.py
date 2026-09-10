@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models.case import Case, CaseStatus
 from app.models.finding import Finding
 from app.models.parsed_email import ParsedEmail
-from app.schemas.analysis import RiskScoreResponse
+from app.schemas.analysis import AIAnalysisResponse, RiskScoreResponse
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
 from app.schemas.finding import FindingListResponse
 from app.schemas.parsed_email import ParsedEmailResponse
@@ -199,6 +199,23 @@ async def get_risk_score(
         "is_heuristic": True,
         "summary": "Case has not been analyzed yet.",
     }
+
+
+@router.get("/{id}/ai-analysis", response_model=AIAnalysisResponse)
+async def get_case_ai_analysis(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    metadata = case.metadata_json or {}
+    ai_analysis = metadata.get("ai_analysis")
+    if not ai_analysis:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI analysis not yet generated for this case",
+        )
+    return ai_analysis
 
 
 @router.post("/{id}/report", status_code=status.HTTP_202_ACCEPTED)
