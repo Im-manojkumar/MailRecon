@@ -1,0 +1,30 @@
+Return-Path: <hr@example.com>
+Received: from mail.hr.com (mail.hr.com [192.0.2.30])
+    by mx.destination.com (Postfix) with ESMTP id 33333
+    for <employee@example.com>; Thu, 10 Sep 2026 10:25:00 +0000 (UTC)
+Message-ID: <qr@hr.com>
+Date: Thu, 10 Sep 2026 10:24:00 +0000
+From: "HR Dept" <hr@example.com>
+To: employee@example.com
+Subject: New Benefits Portal Login
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="boundary-related-1"
+
+--boundary-related-1
+Content-Type: text/html; charset="utf-8"
+
+<html>
+<body>
+<p>Scan the QR code to login to the new portal:</p>
+<img src="cid:qr_image@hr.com" alt="QR Code">
+</body>
+</html>
+
+--boundary-related-1
+Content-Type: image/png; name="qr.png"
+Content-ID: <qr_image@hr.com>
+Content-Disposition: inline; filename="qr.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+--boundary-related-1--

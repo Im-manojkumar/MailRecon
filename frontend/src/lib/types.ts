@@ -1,0 +1,128 @@
+export enum Severity {
+  INFO = 'info',
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  CRITICAL = 'critical',
+}
+
+export enum IndicatorKind {
+  IP = 'ip',
+  DOMAIN = 'domain',
+  URL = 'url',
+  EMAIL = 'email',
+  FILE_HASH = 'file_hash',
+  KEYWORD = 'keyword',
+}
+
+export enum CaseStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export interface AnalystResponse {
+  id: string;
+  email: string;
+  display_name: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface CaseResponse {
+  id: string;
+  status: CaseStatus;
+  created_at: string;
+}
+
+export interface CaseDetail {
+  id: string;
+  status: CaseStatus;
+  created_at: string;
+  updated_at: string | null;
+  file_name: string;
+}
+
+export interface CaseListResponse {
+  cases: CaseDetail[];
+  total: number;
+}
+
+export interface FindingResponse {
+  id: string;
+  case_id: string;
+  detector_name: string;
+  title: string;
+  description: string;
+  severity: Severity;
+  confidence: number;
+}
+
+export interface FindingListResponse {
+  findings: FindingResponse[];
+}
+
+export interface IndicatorResponse {
+  id: string;
+  case_id: string;
+  kind: IndicatorKind;
+  value: string;
+  severity: Severity;
+  tags: string[];
+}
+
+export interface IndicatorListResponse {
+  indicators: IndicatorResponse[];
+}
+
+export interface GraphNode {
+  data: {
+    id: string;
+    label: string;
+    kind?: IndicatorKind | 'case';
+    severity?: Severity;
+  };
+}
+
+export interface GraphEdge {
+  data: {
+    id: string;
+    source: string;
+    target: string;
+    label: string;
+  };
+}
+
+export interface IndicatorGraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface RiskScoreResponse {
+  case_id: string;
+  score: number;
+  label: string;
+  confidence: number;
+}
+
+export interface AnalysisStatusResponse {
+  status: CaseStatus;
+  progress: number;
+  message: string;
+}
+
+export interface ReportResponse {
+  id: string;
+  case_id: string;
+  content: string;
+  format: string;
+  created_at: string;
+}
+
+export interface ReportListResponse {
+  reports: ReportResponse[];
+}

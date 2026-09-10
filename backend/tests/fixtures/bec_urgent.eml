@@ -1,0 +1,21 @@
+Return-Path: <ceo@examp1e.com>
+Received: from mail.attacker.net (mail.attacker.net [198.51.100.2])
+    by mx.destination.com (Postfix) with ESMTP id 98765
+    for <finance@example.com>; Thu, 10 Sep 2026 10:05:00 +0000 (UTC)
+Authentication-Results: mx.destination.com;
+    spf=pass smtp.mailfrom=examp1e.com;
+    dkim=none;
+    dmarc=none
+Message-ID: <badbadbad@examp1e.com>
+Date: Thu, 10 Sep 2026 10:04:00 +0000
+From: "CEO Name" <ceo@examp1e.com>
+Reply-To: ceo-private@freemail.example.org
+To: finance@example.com
+Subject: URGENT: Wire Transfer Needed
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+I need an urgent wire transfer for a new vendor immediately. This is highly confidential, do not discuss it with anyone else. Process this immediately.
+
+Regards,
+CEO

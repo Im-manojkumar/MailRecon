@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Project-specific
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+/data/
+/evidence/
+*.eml
+
+# Exceptions
+!**/tests/fixtures/*.eml
+!alembic/versions/*.py

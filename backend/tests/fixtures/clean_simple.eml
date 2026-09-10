@@ -1,0 +1,22 @@
+Return-Path: <alice@example.com>
+Received: from mail.example.com (mail.example.com [192.0.2.1])
+    by mx.destination.com (Postfix) with ESMTPS id 12345
+    for <bob@example.com>; Thu, 10 Sep 2026 10:00:00 +0000 (UTC)
+Authentication-Results: mx.destination.com;
+    spf=pass smtp.mailfrom=example.com;
+    dkim=pass header.d=example.com;
+    dmarc=pass header.from=example.com
+Message-ID: <1234567890@example.com>
+Date: Thu, 10 Sep 2026 10:00:00 +0000
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Subject: Meeting Tomorrow
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hi Bob,
+
+Are we still on for the meeting tomorrow?
+
+Best,
+Alice

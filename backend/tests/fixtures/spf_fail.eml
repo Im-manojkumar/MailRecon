@@ -1,0 +1,17 @@
+Return-Path: <spammer@nowhere.com>
+Received: from spoof.example.com (spoof.example.com [198.51.100.10])
+    by mx.destination.com (Postfix) with ESMTP id 11111
+    for <user@example.com>; Thu, 10 Sep 2026 10:15:00 +0000 (UTC)
+Authentication-Results: mx.destination.com;
+    spf=fail smtp.mailfrom=nowhere.com;
+    dkim=none;
+    dmarc=fail header.from=trusted.com
+Message-ID: <spoofed@trusted.com>
+Date: Thu, 10 Sep 2026 10:14:00 +0000
+From: "Trusted Bank" <alert@trusted.com>
+To: user@example.com
+Subject: Account Alert
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Your account has been compromised. Please reply with your password.

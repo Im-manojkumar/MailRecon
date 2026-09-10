@@ -1,0 +1,20 @@
+Return-Path: <support@fakepay.com>
+Received: from pwned.server.local (unknown [203.0.113.50])
+    by mx.destination.com (Postfix) with ESMTP id ABCDE
+    for <user@example.com>; Thu, 10 Sep 2026 10:10:00 +0000 (UTC)
+Message-ID: <phish123@fakepay.com>
+Date: Thu, 10 Sep 2026 10:09:00 +0000
+From: Support <support@fakepay.com>
+To: user@example.com
+Subject: Action Required: Update Your Account
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+
+<html>
+<body>
+<p>Dear user,</p>
+<p>Please update your account by visiting <a href="https://login.example-secure.xyz/verify?token=abc">this link</a>.</p>
+<p>You can also access the old portal at <a href="http://192.168.1.100/update">here</a>.</p>
+<p>For more info, visit our main site <a href="https://example.com">example.com</a>.</p>
+</body>
+</html>

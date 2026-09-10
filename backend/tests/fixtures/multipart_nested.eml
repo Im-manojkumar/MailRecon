@@ -1,0 +1,44 @@
+Return-Path: <newsletter@example.com>
+Received: from mail.newsletter.com (mail.newsletter.com [192.0.2.40])
+    by mx.destination.com (Postfix) with ESMTP id 44444
+    for <subscriber@example.com>; Thu, 10 Sep 2026 10:30:00 +0000 (UTC)
+Message-ID: <nested@newsletter.com>
+Date: Thu, 10 Sep 2026 10:29:00 +0000
+From: "Newsletter" <newsletter@example.com>
+To: subscriber@example.com
+Subject: Weekly Update
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary-mixed-2"
+
+--boundary-mixed-2
+Content-Type: multipart/alternative; boundary="boundary-alt-1"
+
+--boundary-alt-1
+Content-Type: text/plain; charset="utf-8"
+
+This is the plain text version.
+
+--boundary-alt-1
+Content-Type: multipart/related; boundary="boundary-rel-2"
+
+--boundary-rel-2
+Content-Type: text/html; charset="utf-8"
+
+<html><body><p>HTML version with image</p><img src="cid:logo@newsletter.com"></body></html>
+
+--boundary-rel-2
+Content-Type: image/png; name="logo.png"
+Content-ID: <logo@newsletter.com>
+Content-Disposition: inline; filename="logo.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+--boundary-rel-2--
+--boundary-alt-1--
+--boundary-mixed-2
+Content-Type: application/pdf; name="update.pdf"
+Content-Disposition: attachment; filename="update.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLgo=
+--boundary-mixed-2--

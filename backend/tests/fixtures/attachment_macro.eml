@@ -1,0 +1,24 @@
+Return-Path: <vendor@example.com>
+Received: from mail.vendor.com (mail.vendor.com [192.0.2.20])
+    by mx.destination.com (Postfix) with ESMTP id 22222
+    for <accounts@example.com>; Thu, 10 Sep 2026 10:20:00 +0000 (UTC)
+Message-ID: <macro@vendor.com>
+Date: Thu, 10 Sep 2026 10:19:00 +0000
+From: "Vendor" <vendor@example.com>
+To: accounts@example.com
+Subject: Invoice 2024
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary-mixed-1"
+
+--boundary-mixed-1
+Content-Type: text/plain; charset="utf-8"
+
+Please see the attached invoice.
+
+--boundary-mixed-1
+Content-Type: application/vnd.ms-excel.sheet.macroEnabled.12; name="invoice_2024.xlsm"
+Content-Disposition: attachment; filename="invoice_2024.xlsm"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAIAAAA
+--boundary-mixed-1--

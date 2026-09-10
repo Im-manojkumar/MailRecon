@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports: [] # Do not expose in production
+
+  redis:
+    restart: unless-stopped
+    ports: [] # Do not expose in production
+
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    volumes:
+      - evidence:/data/evidence
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  worker:
+    volumes:
+      - evidence:/data/evidence
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  frontend:
+    command: npm start
+    volumes: []
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G

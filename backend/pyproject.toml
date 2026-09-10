@@ -1,0 +1,44 @@
+[project]
+name = "mailrecon-backend"
+version = "0.1.0"
+description = "MailRecon AI — Evidence-First Email Threat Detection Backend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg",
+    "alembic",
+    "pydantic>=2.0.0",
+    "pydantic-settings",
+    "email-validator",
+    "python-multipart",
+    "redis",
+    "rq",
+    "httpx",
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+    "bcrypt>=4.0,<5",
+    "bleach",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio>=0.23",
+    "httpx",
+    "aiosqlite",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
