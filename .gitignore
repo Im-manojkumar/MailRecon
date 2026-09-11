@@ -21,6 +21,7 @@ out/
 build/
 dist/
 .npm/
+*.tsbuildinfo
 
 # IDE
 .vscode/

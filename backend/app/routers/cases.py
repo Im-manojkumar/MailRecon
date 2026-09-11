@@ -1,26 +1,39 @@
 import hashlib
+import json
 import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_analyst
 from app.config import settings
 from app.database import get_db
+from app.correlation.campaign_clusterer import CampaignClusterer
+from app.export.ioc_exporter import IocExportEngine
 from app.models.case import Case, CaseStatus
 from app.models.finding import Finding
 from app.models.indicator import Indicator
 from app.models.parsed_email import ParsedEmail
 from app.models.report import Report, ReportFormat
 from app.reporting.generator import ForensicReportGenerator
+from app.response.playbook_generator import PlaybookGenerator
+from app.schemas.campaign import CaseCampaignAffiliation
 from app.schemas.analysis import (
     AIAnalysisResponse,
+    DomainIntelResponse,
+    FinancialForensicsResponse,
+    LiveDnsValidationResponse,
     MacroAnalysisListResponse,
     ObfuscationAnalysisResponse,
+    OriginProfileResponse,
+    PlaybookResponse,
+    PlaybookToggleRequest,
     RiskScoreResponse,
+    ThreatClassificationResponse,
 )
 from app.schemas.case import CaseDetail, CaseListResponse, CaseResponse
 from app.schemas.finding import FindingListResponse
@@ -94,8 +107,29 @@ async def list_cases(
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Case).where(Case.analyst_id == analyst_id))
-    items = result.scalars().all()
+    result = await db.execute(
+        select(Case).where(Case.analyst_id == analyst_id).order_by(Case.created_at.desc())
+    )
+    cases = result.scalars().all()
+    items = []
+    for c in cases:
+        meta = c.metadata_json or {}
+        tc = meta.get("threat_classification") or {}
+        sc = meta.get("risk_score") or {}
+        items.append(
+            CaseResponse(
+                id=c.id,
+                status=c.status,
+                original_sha256=c.original_sha256,
+                original_size=c.original_size,
+                filename=c.filename,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+                threat_category=tc.get("primary_category"),
+                category_label=tc.get("category_label"),
+                risk_score=sc.get("score"),
+            )
+        )
     return {"items": items, "total": len(items)}
 
 
@@ -393,6 +427,92 @@ async def get_case_obfuscation(
     return ObfuscationAnalysisResponse(**obf_data)
 
 
+@router.get("/{id}/domain-intel", response_model=DomainIntelResponse)
+async def get_case_domain_intel(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    domain_data = meta.get("domain_intel")
+    if not domain_data:
+        return DomainIntelResponse(domain="", risk_level="unknown", status=[])
+    return DomainIntelResponse(**domain_data)
+
+
+@router.get("/{id}/dns-validation", response_model=LiveDnsValidationResponse)
+async def get_case_dns_validation(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    dns_data = meta.get("dns_validation")
+    if not dns_data:
+        return LiveDnsValidationResponse(
+            domain="",
+            dns_resolved=False,
+            spf={},
+            dmarc={},
+            mx={},
+            alignment={},
+            message_id_valid=True,
+            anomalies=[],
+        )
+    return LiveDnsValidationResponse(**dns_data)
+
+
+@router.get("/{id}/origin-profile", response_model=OriginProfileResponse)
+async def get_case_origin_profile(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    origin_data = meta.get("origin_profile")
+    if not origin_data:
+        return OriginProfileResponse(origin_confidence="inconclusive")
+    return OriginProfileResponse(**origin_data)
+
+
+@router.get("/{id}/threat-category", response_model=ThreatClassificationResponse)
+async def get_case_threat_category(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    data = meta.get("threat_classification")
+    if not data:
+        return ThreatClassificationResponse(
+            primary_category="LEGITIMATE",
+            category_label="Legitimate Business Communication",
+            confidence=0.5,
+            secondary_categories=[],
+            justification=["Classification pending or not available."],
+            action_summary="Routine email.",
+        )
+    return ThreatClassificationResponse(**data)
+
+
+@router.get("/{id}/financial-forensics", response_model=FinancialForensicsResponse)
+async def get_case_financial_forensics(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+    data = meta.get("financial_forensics")
+    if not data:
+        return FinancialForensicsResponse(is_financial_threat=False, risk_level="none")
+    return FinancialForensicsResponse(**data)
+
+
 @router.get("/{id}/original")
 async def get_original_file(
     id: uuid.UUID,
@@ -423,3 +543,248 @@ async def get_original_file(
         "X-Evidence-SHA256": case.original_sha256,
     }
     return StreamingResponse(stream, media_type="message/rfc822", headers=headers)
+
+
+@router.get("/{id}/playbook", response_model=PlaybookResponse)
+async def get_case_playbook(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    completed_ids = set(meta.get("completed_action_ids", []))
+
+    return PlaybookGenerator.generate(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        threat_classification=meta.get("threat_classification"),
+        financial_forensics=meta.get("financial_forensics"),
+        origin_profile=meta.get("origin_profile"),
+        dns_validation=meta.get("dns_validation"),
+        completed_action_ids=completed_ids,
+    )
+
+
+@router.post("/{id}/playbook/toggle", response_model=PlaybookResponse)
+async def toggle_playbook_action(
+    id: uuid.UUID,
+    payload: PlaybookToggleRequest,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = dict(case.metadata_json or {})
+    completed_ids = set(meta.get("completed_action_ids", []))
+
+    if payload.completed:
+        completed_ids.add(payload.action_id)
+    else:
+        completed_ids.discard(payload.action_id)
+
+    meta["completed_action_ids"] = list(completed_ids)
+    case.metadata_json = meta
+    flag_modified(case, "metadata_json")
+    await db.commit()
+    await db.refresh(case)
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    return PlaybookGenerator.generate(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        threat_classification=meta.get("threat_classification"),
+        financial_forensics=meta.get("financial_forensics"),
+        origin_profile=meta.get("origin_profile"),
+        dns_validation=meta.get("dns_validation"),
+        completed_action_ids=completed_ids,
+    )
+
+
+@router.get("/{id}/export/stix")
+async def export_case_stix(
+    id: uuid.UUID,
+    download: bool = Query(default=False),
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    findings_res = await db.execute(select(Finding).where(Finding.case_id == id))
+    findings = findings_res.scalars().all()
+
+    indicators_res = await db.execute(select(Indicator).where(Indicator.case_id == id))
+    indicators = indicators_res.scalars().all()
+
+    threat_class = meta.get("threat_classification")
+    bundle = IocExportEngine.export_stix_bundle(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        findings=findings,
+        indicators=indicators,
+        threat_classification=threat_class,
+    )
+    content = json.dumps(bundle, indent=2)
+
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="MailRecon-{case.id}-stix2.1.json"'
+    return Response(content=content, media_type="application/json", headers=headers)
+
+
+@router.get("/{id}/export/yara")
+async def export_case_yara(
+    id: uuid.UUID,
+    download: bool = Query(default=False),
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    findings_res = await db.execute(select(Finding).where(Finding.case_id == id))
+    findings = findings_res.scalars().all()
+
+    content = IocExportEngine.export_yara_rule(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        findings=findings,
+    )
+
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="MailRecon-{case.id}.yar"'
+    return Response(content=content, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+@router.get("/{id}/export/sigma")
+async def export_case_sigma(
+    id: uuid.UUID,
+    download: bool = Query(default=False),
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    meta = case.metadata_json or {}
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    findings_res = await db.execute(select(Finding).where(Finding.case_id == id))
+    findings = findings_res.scalars().all()
+
+    content = IocExportEngine.export_sigma_rule(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        findings=findings,
+        threat_classification=meta.get("threat_classification"),
+    )
+
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="MailRecon-{case.id}-sigma.yml"'
+    return Response(content=content, media_type="text/yaml; charset=utf-8", headers=headers)
+
+
+@router.get("/{id}/export/snort")
+async def export_case_snort(
+    id: uuid.UUID,
+    download: bool = Query(default=False),
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+
+    parsed_res = await db.execute(select(ParsedEmail).where(ParsedEmail.case_id == id))
+    parsed = parsed_res.scalars().first()
+
+    findings_res = await db.execute(select(Finding).where(Finding.case_id == id))
+    findings = findings_res.scalars().all()
+
+    content = IocExportEngine.export_snort_rules(
+        case_id=str(case.id),
+        parsed_email=parsed,
+        findings=findings,
+    )
+
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="MailRecon-{case.id}-suricata.rules"'
+    return Response(content=content, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+@router.get("/{id}/campaign", response_model=CaseCampaignAffiliation)
+async def get_case_campaign(
+    id: uuid.UUID,
+    analyst_id: uuid.UUID = Depends(get_current_analyst),
+    db: AsyncSession = Depends(get_db),
+):
+    case = await get_case_or_404(id, analyst_id, db)
+    cid_str = str(case.id)
+
+    # Load all cases for clustering context
+    stmt = (
+        select(Case, ParsedEmail)
+        .outerjoin(ParsedEmail, Case.id == ParsedEmail.case_id)
+        .where(Case.analyst_id == analyst_id)
+        .order_by(Case.created_at.desc())
+    )
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    case_records = []
+    for c, p in rows:
+        case_records.append({
+            "id": str(c.id),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "filename": c.filename or f"Case_{str(c.id)[:8]}",
+            "original_sha256": c.original_sha256,
+            "metadata_json": c.metadata_json or {},
+            "parsed_email": {
+                "headers_json": p.headers_json if p else {},
+                "attachments_json": p.attachments_json if p else [],
+                "urls_json": p.urls_json if p else [],
+                "body_text": p.body_text if p else "",
+            } if p else {},
+        })
+
+    clusters = CampaignClusterer.cluster_cases(case_records)
+    for c in clusters:
+        case_ids_in_camp = [cs["case_id"] for cs in c.cases]
+        if cid_str in case_ids_in_camp:
+            affiliated = [cs for cs in c.cases if cs["case_id"] != cid_str]
+            case_shared = [
+                art for art in c.shared_artifacts if cid_str in art.get("case_ids", [])
+            ]
+            return CaseCampaignAffiliation(
+                case_id=cid_str,
+                is_part_of_campaign=True,
+                campaign_id=c.campaign_id,
+                campaign_name=c.name,
+                threat_archetype=c.threat_archetype,
+                total_correlated_cases=c.case_count,
+                shared_artifacts=case_shared or c.shared_artifacts,
+                affiliated_cases=affiliated,
+                graph=c.graph,
+            )
+
+    return CaseCampaignAffiliation(
+        case_id=cid_str,
+        is_part_of_campaign=False,
+        total_correlated_cases=1,
+        shared_artifacts=[],
+        affiliated_cases=[],
+    )
+
+

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { api } from '@/lib/api';
 import {
@@ -15,6 +16,12 @@ import {
   ReportResponse,
   MacroAnalysisItem,
   ObfuscationAnalysisResponse,
+  DomainIntelResponse,
+  LiveDnsValidationResponse,
+  OriginProfileResponse,
+  ThreatClassificationResponse,
+  FinancialForensicsResponse,
+  CaseCampaignAffiliation,
 } from '@/lib/types';
 import StatusBadge from '@/components/StatusBadge';
 import SeverityBadge from '@/components/SeverityBadge';
@@ -24,8 +31,11 @@ import RouteMap from '@/components/RouteMap';
 import EmailViewer from '@/components/EmailViewer';
 import AIBriefingView from '@/components/AIBriefingView';
 import IndicatorGraphView from '@/components/IndicatorGraphView';
+import FinancialForensicsCard from '@/components/FinancialForensicsCard';
+import IncidentResponseView from '@/components/IncidentResponseView';
 import {
   Shield,
+  ShieldAlert,
   FileText,
   Clock,
   Download,
@@ -40,6 +50,10 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Globe,
+  Radio,
+  Server,
+  ArrowRight,
 } from 'lucide-react';
 
 export default function CaseDetailPage({ params }: { params: { id: string } }) {
@@ -55,6 +69,12 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const [aiData, setAiData] = useState<AIAnalysisResponse | null>(null);
   const [graph, setGraph] = useState<IndicatorGraphResponse | null>(null);
   const [reports, setReports] = useState<ReportResponse[]>([]);
+  const [domainIntel, setDomainIntel] = useState<DomainIntelResponse | null>(null);
+  const [dnsValidation, setDnsValidation] = useState<LiveDnsValidationResponse | null>(null);
+  const [originProfile, setOriginProfile] = useState<OriginProfileResponse | null>(null);
+  const [threatClass, setThreatClass] = useState<ThreatClassificationResponse | null>(null);
+  const [financial, setFinancial] = useState<FinancialForensicsResponse | null>(null);
+  const [campaignAffiliation, setCampaignAffiliation] = useState<CaseCampaignAffiliation | null>(null);
   const [generatingFormat, setGeneratingFormat] = useState<'html' | 'json' | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -73,7 +93,13 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       api.cases.getReports(params.id),
       api.cases.getMacros(params.id),
       api.cases.getObfuscation(params.id),
-    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes, reportsRes, macRes, obfRes]) => {
+      api.cases.getDomainIntel(params.id),
+      api.cases.getDnsValidation(params.id),
+      api.cases.getOriginProfile(params.id),
+      api.cases.getThreatClassification(params.id),
+      api.cases.getFinancialForensics(params.id),
+      api.cases.getCampaign(params.id),
+    ]).then(([caseRes, scoreRes, findingsRes, parsedRes, routeRes, qrRes, aiRes, graphRes, reportsRes, macRes, obfRes, domRes, dnsRes, origRes, threatRes, finRes, campRes]) => {
       if (caseRes.status === 'fulfilled') setCaseData(caseRes.value);
       if (scoreRes.status === 'fulfilled') setScore(scoreRes.value);
       if (findingsRes.status === 'fulfilled') {
@@ -93,6 +119,12 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       if (reportsRes.status === 'fulfilled') setReports(reportsRes.value.items || reportsRes.value.reports || []);
       if (macRes.status === 'fulfilled') setMacros(macRes.value.items || []);
       if (obfRes.status === 'fulfilled') setObfuscation(obfRes.value);
+      if (domRes.status === 'fulfilled') setDomainIntel(domRes.value);
+      if (dnsRes.status === 'fulfilled') setDnsValidation(dnsRes.value);
+      if (origRes.status === 'fulfilled') setOriginProfile(origRes.value);
+      if (threatRes.status === 'fulfilled') setThreatClass(threatRes.value);
+      if (finRes.status === 'fulfilled') setFinancial(finRes.value);
+      if (campRes && campRes.status === 'fulfilled') setCampaignAffiliation(campRes.value);
       setLoading(false);
     });
   }, [params.id]);
@@ -146,6 +178,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
     { id: 'ai', label: 'AI Briefing', icon: Bot },
     { id: 'graph', label: 'Indicator Graph', icon: Network },
     { id: 'report', label: 'Forensic Report', icon: FileCode },
+    { id: 'response', label: 'Incident Response & Export', icon: ShieldAlert },
   ];
 
   return (
@@ -167,6 +200,32 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
               <span>•</span>
               <span>CREATED: <span className="text-gray-300">{new Date(caseData.created_at).toLocaleString()}</span></span>
             </div>
+
+            {threatClass && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className={`px-2.5 py-1 text-xs font-mono font-bold rounded-md uppercase border flex items-center gap-1.5 ${
+                  threatClass.primary_category === 'CREDENTIAL_PHISHING'
+                    ? 'bg-rose-950/90 text-rose-300 border-rose-700/80 shadow-sm shadow-rose-950'
+                    : threatClass.primary_category === 'PAYMENT_DIVERSION'
+                    ? 'bg-amber-950/90 text-amber-300 border-amber-700/80 shadow-sm shadow-amber-950'
+                    : threatClass.primary_category === 'MALWARE_DELIVERY'
+                    ? 'bg-red-950/90 text-red-300 border-red-700/80 shadow-sm shadow-red-950'
+                    : threatClass.primary_category === 'CEO_IMPERSONATION'
+                    ? 'bg-purple-950/90 text-purple-300 border-purple-700/80 shadow-sm shadow-purple-950'
+                    : threatClass.primary_category === 'SPAM_RECONNAISSANCE'
+                    ? 'bg-yellow-950/90 text-yellow-300 border-yellow-700/80'
+                    : 'bg-emerald-950/90 text-emerald-300 border-emerald-700/80'
+                }`}>
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>{threatClass.category_label} ({Math.round(threatClass.confidence * 100)}% Confidence)</span>
+                </span>
+                {threatClass.action_summary && (
+                  <span className="text-xs text-gray-400 italic">
+                    SOC Action: {threatClass.action_summary}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-3">
@@ -180,6 +239,56 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
             </button>
           </div>
         </div>
+
+        {/* Campaign Affiliation Alert Banner */}
+        {campaignAffiliation?.is_part_of_campaign && (
+          <div className="p-4 bg-gradient-to-r from-red-950/80 via-rose-950/40 to-gray-900 border border-rose-500/70 rounded-lg shadow-lg shadow-rose-950/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-2 bg-rose-900/60 border border-rose-500/80 rounded-md text-rose-300 mt-0.5 shrink-0">
+                  <Network className="w-5 h-5 text-rose-400 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-rose-300 bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700">
+                      Coordinated Threat Campaign Detected
+                    </span>
+                    <span className="text-xs text-rose-200/80 font-mono font-semibold">
+                      {campaignAffiliation.total_correlated_cases} Cases Correlated
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    {campaignAffiliation.campaign_name}
+                  </h3>
+                  <p className="text-xs text-gray-300">
+                    This email is part of a broader multi-case threat campaign sharing infrastructure, financial anchors, or attack patterns across <span className="font-semibold text-white">{campaignAffiliation.total_correlated_cases} investigations</span>.
+                  </p>
+                  {campaignAffiliation.shared_artifacts && campaignAffiliation.shared_artifacts.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] text-gray-400 font-mono mr-1">Shared Anchors:</span>
+                      {campaignAffiliation.shared_artifacts.map((art, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-gray-950/80 border border-rose-800/70 rounded text-[11px] font-mono text-rose-300">
+                          <span className="text-gray-400 font-semibold">{art.kind}:</span> {art.value.length > 25 ? `${art.value.substring(0, 23)}...` : art.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-start md:self-center">
+                {campaignAffiliation.campaign_id && (
+                  <Link
+                    href={`/campaigns?id=${campaignAffiliation.campaign_id}`}
+                    className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-md shadow transition-colors"
+                  >
+                    <span>Inspect Global Campaign Graph</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex space-x-2 border-b border-gray-800 overflow-x-auto">
@@ -254,6 +363,138 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                 </div>
               </div>
 
+              {/* Origin & Infrastructure Intelligence Profile */}
+              <div className="p-6 border border-gray-800 rounded-lg bg-gray-900/50 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <Radio className="w-4 h-4 text-indigo-400" />
+                    <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                      Origin Traceability & Infrastructure Attribution
+                    </h3>
+                  </div>
+                  {originProfile?.origin_confidence && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[11px] text-gray-500">Attribution Confidence:</span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold uppercase ${
+                        originProfile.origin_confidence === 'high'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          : originProfile.origin_confidence === 'medium'
+                          ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                          : 'bg-red-950 text-red-300 border border-red-800'
+                      }`}>
+                        {originProfile.origin_confidence}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+                  <div className="p-3 bg-gray-950/70 border border-gray-800 rounded-lg space-y-1">
+                    <span className="text-gray-500 block">Originating Ingress IP</span>
+                    <span className="text-gray-200 font-mono font-bold text-sm">
+                      {originProfile?.originating_ip || 'No Public IP Found'}
+                    </span>
+                    <span className="text-[11px] text-gray-400 block truncate">
+                      {originProfile?.city ? `${originProfile.city}, ` : ''}{originProfile?.country || 'Unknown Location'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-gray-950/70 border border-gray-800 rounded-lg space-y-1">
+                    <span className="text-gray-500 block">ISP & Autonomous System</span>
+                    <span className="text-gray-200 font-mono font-semibold truncate block">
+                      {originProfile?.asn || 'ASN: N/A'}
+                    </span>
+                    <span className="text-[11px] text-gray-400 block truncate" title={originProfile?.isp || originProfile?.org || ''}>
+                      {originProfile?.isp || originProfile?.org || 'Standard Telecom'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-gray-950/70 border border-gray-800 rounded-lg space-y-1">
+                    <span className="text-gray-500 block">Infrastructure Archetype</span>
+                    <span className="text-gray-200 font-semibold block">
+                      {originProfile?.infra_label || 'Standard Internet Gateway'}
+                    </span>
+                    {originProfile?.is_anonymized && (
+                      <span className="text-[10px] text-red-400 font-bold uppercase block">
+                        ANONYMIZED ROUTING (TOR / VPN)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-gray-950/70 border border-gray-800 rounded-lg space-y-1">
+                    <span className="text-gray-500 block">Sender Domain Age & Registrar</span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-gray-200 font-bold font-mono">
+                        {domainIntel?.domain_age_days != null ? `${domainIntel.domain_age_days} days` : 'Age N/A'}
+                      </span>
+                      {domainIntel?.is_newly_registered && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-300 border border-red-800 uppercase">
+                          NEW DOMAIN
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-400 block truncate" title={domainIntel?.registrar || ''}>
+                      {domainIntel?.registrar || 'Registrar N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Fraud & Payment Diversion Forensics */}
+              <FinancialForensicsCard financial={financial} />
+
+              {/* Linked Campaign Evidence & Peer Cases */}
+              {campaignAffiliation?.is_part_of_campaign && campaignAffiliation.affiliated_cases && campaignAffiliation.affiliated_cases.length > 1 && (
+                <div className="p-6 border border-rose-900/60 rounded-lg bg-gray-900/60 space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Network className="w-4 h-4 text-rose-400" />
+                      <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                        Linked Campaign Evidence & Peer Cases ({campaignAffiliation.affiliated_cases.length - 1} peers)
+                      </h3>
+                    </div>
+                    {campaignAffiliation.campaign_id && (
+                      <Link
+                        href={`/campaigns?id=${campaignAffiliation.campaign_id}`}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-medium inline-flex items-center gap-1"
+                      >
+                        <span>Open Campaign View</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {campaignAffiliation.affiliated_cases
+                      .filter((c) => c.case_id !== caseData.id)
+                      .map((peer) => (
+                        <Link
+                          key={peer.case_id}
+                          href={`/cases/${peer.case_id}`}
+                          className="p-3 bg-gray-950/70 border border-gray-800 hover:border-rose-700/60 rounded-lg transition-colors group block space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-xs font-bold text-gray-200 group-hover:text-rose-300 truncate max-w-[180px]">
+                              {peer.filename || peer.case_id.substring(0, 8)}
+                            </span>
+                            <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${
+                              peer.score >= 70 ? 'bg-red-950 text-red-400 border border-red-800' :
+                              peer.score >= 40 ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                              'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                            }`}>
+                              Risk: {Math.round(peer.score)}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-400 flex items-center justify-between">
+                            <span className="truncate">{peer.from_email || 'Unknown Sender'}</span>
+                            <span className="font-mono text-[10px] text-gray-500">{new Date(peer.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </Link>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {/* Quick Findings Snapshot */}
               <div className="p-5 border border-gray-800 rounded-lg bg-gray-900/40 space-y-3">
                 <div className="flex items-center justify-between">
@@ -298,6 +539,7 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
               qrCodes={qrCodes}
               macros={macros}
               obfuscation={obfuscation}
+              dnsValidation={dnsValidation}
               caseId={caseData.id}
             />
           )}
@@ -566,6 +808,11 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
                 )}
               </div>
             </div>
+          )}
+
+          {/* TAB 8: INCIDENT RESPONSE & EXPORT */}
+          {activeTab === 'response' && (
+            <IncidentResponseView caseId={caseData.id} />
           )}
         </div>
       </div>

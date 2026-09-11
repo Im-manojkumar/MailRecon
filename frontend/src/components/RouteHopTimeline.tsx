@@ -40,6 +40,21 @@ export default function RouteHopTimeline({ route }: Props) {
           </div>
         </div>
 
+        {route.origin_confidence && (
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-gray-400">Origin Trace Confidence:</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold uppercase ${
+              route.origin_confidence === 'high'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                : route.origin_confidence === 'medium'
+                ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                : 'bg-red-950 text-red-300 border border-red-800'
+            }`}>
+              {route.origin_confidence}
+            </span>
+          </div>
+        )}
+
         {route.anomalies && route.anomalies.length > 0 && (
           <div className="flex items-center space-x-2 px-3 py-1 bg-red-950/60 border border-red-800/80 rounded text-red-300 text-xs">
             <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -47,6 +62,57 @@ export default function RouteHopTimeline({ route }: Props) {
           </div>
         )}
       </div>
+
+      {/* Originating Ingress Node Spotlight */}
+      {route.originating_node && (
+        <div className="p-4 bg-gradient-to-r from-amber-950/40 via-gray-900 to-gray-900 border border-amber-800/60 rounded-lg space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                Forensic Originating Ingress Node
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-amber-400/80">
+              Earliest Trustworthy Public Relay
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-1">
+            <div className="bg-gray-950/80 p-2.5 rounded border border-gray-800">
+              <span className="text-gray-500 block mb-0.5">Originating IP</span>
+              <span className="text-gray-200 font-mono font-bold">{route.originating_node.ip || 'Unknown'}</span>
+            </div>
+            <div className="bg-gray-950/80 p-2.5 rounded border border-gray-800">
+              <span className="text-gray-500 block mb-0.5">Location</span>
+              <span className="text-gray-200 font-semibold">
+                {route.originating_node.geoip?.city ? `${route.originating_node.geoip.city}, ` : ''}
+                {route.originating_node.geoip?.country || 'Unknown'}
+              </span>
+            </div>
+            <div className="bg-gray-950/80 p-2.5 rounded border border-gray-800">
+              <span className="text-gray-500 block mb-0.5">ISP & ASN</span>
+              <span className="text-gray-200 font-mono truncate block" title={route.originating_node.geoip?.isp || route.originating_node.geoip?.org || ''}>
+                {route.originating_node.geoip?.asn || ''} {route.originating_node.geoip?.isp || route.originating_node.geoip?.org || 'Public ISP'}
+              </span>
+            </div>
+            <div className="bg-gray-950/80 p-2.5 rounded border border-gray-800">
+              <span className="text-gray-500 block mb-0.5">Infrastructure Archetype</span>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase inline-block ${
+                route.originating_node.infra_tag?.risk_level === 'critical'
+                  ? 'bg-red-950 text-red-300 border border-red-800'
+                  : route.originating_node.infra_tag?.risk_level === 'high'
+                  ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                  : route.originating_node.infra_tag?.risk_level === 'medium'
+                  ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+              }`}>
+                {route.originating_node.infra_tag?.label || 'Public Gateway'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Anomalies List */}
       {route.anomalies && route.anomalies.length > 0 && (
@@ -66,7 +132,8 @@ export default function RouteHopTimeline({ route }: Props) {
       {/* Chronological Hop Progression */}
       <div className="relative pl-6 space-y-8 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-b before:from-indigo-500 before:via-blue-500 before:to-gray-700">
         {route.hops.map((hop, index) => {
-          const isOrigin = index === 0;
+          const hopNumber = hop.hop_number || hop.hop || (index + 1);
+          const isOrigin = hop.is_originating || index === 0;
           const isFinal = index === route.hops.length - 1;
           const hasNegativeDelay = hop.delay_seconds != null && hop.delay_seconds < -15;
           const hasExcessiveDelay = hop.delay_seconds != null && hop.delay_seconds > 600;
@@ -91,7 +158,7 @@ export default function RouteHopTimeline({ route }: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-xs font-mono font-bold text-indigo-400 uppercase">
-                      Hop {hop.hop}
+                      Hop {hopNumber}
                     </span>
                     {isOrigin && (
                       <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-950 text-amber-300 border border-amber-700 rounded">
@@ -101,6 +168,19 @@ export default function RouteHopTimeline({ route }: Props) {
                     {isFinal && (
                       <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700 rounded">
                         DESTINATION MX
+                      </span>
+                    )}
+                    {hop.infra_tag && (
+                      <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                        hop.infra_tag.risk_level === 'critical'
+                          ? 'bg-red-950 text-red-300 border border-red-800'
+                          : hop.infra_tag.risk_level === 'high'
+                          ? 'bg-orange-950 text-orange-300 border border-orange-800'
+                          : hop.infra_tag.risk_level === 'medium'
+                          ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                          : 'bg-gray-800 text-gray-300 border border-gray-700'
+                      }`}>
+                        {hop.infra_tag.label}
                       </span>
                     )}
                   </div>
@@ -116,11 +196,11 @@ export default function RouteHopTimeline({ route }: Props) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-gray-500 block mb-0.5">Claimed Sender (from):</span>
-                    <span className="text-gray-200 font-mono break-all">{hop.from_claimed || 'Not specified'}</span>
+                    <span className="text-gray-200 font-mono break-all">{hop.from_claimed || hop.from_host || 'Not specified'}</span>
                   </div>
                   <div>
                     <span className="text-gray-500 block mb-0.5">Receiving Node (by):</span>
-                    <span className="text-gray-200 font-mono break-all">{hop.by_node || 'Not specified'}</span>
+                    <span className="text-gray-200 font-mono break-all">{hop.by_node || hop.by_host || 'Not specified'}</span>
                   </div>
                 </div>
 
@@ -148,7 +228,7 @@ export default function RouteHopTimeline({ route }: Props) {
                           )}
                           {hop.geoip.asn && (
                             <span className="px-2 py-1 bg-purple-950/80 text-purple-300 border border-purple-800 rounded">
-                              {hop.geoip.asn} {hop.geoip.org ? `(${hop.geoip.org})` : ''}
+                              {hop.geoip.asn} {hop.geoip.org || hop.geoip.isp ? `(${hop.geoip.org || hop.geoip.isp})` : ''}
                             </span>
                           )}
                         </>
@@ -171,7 +251,7 @@ export default function RouteHopTimeline({ route }: Props) {
                 </div>
 
                 {/* Inter-hop Delay Metric */}
-                {index > 0 && hop.delay_display && (
+                {index > 0 && (hop.delay_display || hop.delay_seconds != null) && (
                   <div className="mt-2 pt-2 border-t border-gray-800/60 flex items-center space-x-2 text-xs">
                     <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
                     <span className="text-gray-400">Transit delay from prior hop:</span>
@@ -184,7 +264,7 @@ export default function RouteHopTimeline({ route }: Props) {
                           : 'text-gray-200'
                       }`}
                     >
-                      {hop.delay_display}
+                      {hop.delay_display || `${hop.delay_seconds?.toFixed(1)}s`}
                     </span>
                     {hasNegativeDelay && (
                       <span className="text-red-400 font-semibold text-[11px]">

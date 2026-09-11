@@ -7,7 +7,7 @@ import uuid
 
 from app.config import settings
 from app.database import engine
-from app.routers import health, auth, cases
+from app.routers import auth, campaigns, cases, health
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +54,4 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
+app.include_router(campaigns.router, prefix="/api/campaigns", tags=["campaigns"])

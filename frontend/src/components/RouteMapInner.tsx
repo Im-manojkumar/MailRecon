@@ -95,7 +95,7 @@ export default function RouteMapInner({ route }: Props) {
             <Marker
               key={idx}
               position={[lat, lon]}
-              icon={createCustomIcon(hop.hop, isOrigin, isFinal)}
+              icon={createCustomIcon(hop.hop ?? idx + 1, isOrigin, isFinal)}
             >
               <Popup className="custom-leaflet-popup">
                 <div className="p-2 text-xs text-gray-900 font-sans space-y-1">

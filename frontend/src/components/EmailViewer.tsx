@@ -8,6 +8,7 @@ import {
   ExtractedUrl,
   MacroAnalysisItem,
   ObfuscationAnalysisResponse,
+  LiveDnsValidationResponse,
 } from '@/lib/types';
 import {
   Mail,
@@ -27,6 +28,9 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  Globe,
+  Server,
+  Lock,
 } from 'lucide-react';
 
 interface Props {
@@ -34,10 +38,11 @@ interface Props {
   qrCodes?: QrCodeResult[];
   macros?: MacroAnalysisItem[];
   obfuscation?: ObfuscationAnalysisResponse | null;
+  dnsValidation?: LiveDnsValidationResponse | null;
   caseId: string;
 }
 
-export default function EmailViewer({ parsed, qrCodes, macros, obfuscation, caseId }: Props) {
+export default function EmailViewer({ parsed, qrCodes, macros, obfuscation, dnsValidation, caseId }: Props) {
   const [viewMode, setViewMode] = useState<'html' | 'text' | 'headers'>('html');
   const [showAllHeaders, setShowAllHeaders] = useState(false);
   const [deobfMode, setDeobfMode] = useState(false);
@@ -119,34 +124,35 @@ export default function EmailViewer({ parsed, qrCodes, macros, obfuscation, case
 
             <button
               onClick={() => setDeobfMode(!deobfMode)}
-              className={`px-3 py-1.5 text-xs font-mono font-semibold rounded-md border transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors flex items-center space-x-1.5 ${
                 deobfMode
-                  ? 'bg-cyan-900/80 border-cyan-500 text-cyan-200 shadow-lg shadow-cyan-950/50'
-                  : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-600'
+                  ? 'bg-amber-600 text-white border-amber-500 shadow-md'
+                  : 'bg-amber-950/80 text-amber-300 border-amber-700 hover:bg-amber-900/60'
               }`}
             >
-              {deobfMode ? '✓ Viewing: De-obfuscated View' : '👁️ Toggle De-obfuscated View'}
+              <Cpu className="w-3.5 h-3.5" />
+              <span>{deobfMode ? 'De-obfuscation Active' : 'Normalize Content'}</span>
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono">
             {zeroWidthCount > 0 && (
-              <span className="px-2 py-0.5 text-[11px] font-mono bg-red-950 text-red-300 border border-red-800 rounded">
-                {zeroWidthCount} Zero-Width Character(s)
+              <span className="px-2 py-0.5 bg-amber-900/60 text-amber-200 border border-amber-700/60 rounded">
+                Zero-Width Hidden Chars: {zeroWidthCount}
               </span>
             )}
             {rloDetected && (
-              <span className="px-2 py-0.5 text-[11px] font-mono bg-purple-950 text-purple-300 border border-purple-800 rounded">
-                Right-To-Left Override (RLO) Detected
+              <span className="px-2 py-0.5 bg-red-900/80 text-red-200 border border-red-700/80 rounded">
+                Right-to-Left Override (RLO) Found
               </span>
             )}
             {homoglyphCount > 0 && (
-              <span className="px-2 py-0.5 text-[11px] font-mono bg-amber-900/60 text-amber-200 border border-amber-700 rounded">
-                {homoglyphCount} Homoglyph Lookalike(s)
+              <span className="px-2 py-0.5 bg-amber-900/60 text-amber-200 border border-amber-700/60 rounded">
+                Cyrillic/Greek Homoglyphs: {homoglyphCount}
               </span>
             )}
             {mixedTokens.length > 0 && (
-              <span className="px-2 py-0.5 text-[11px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-800 rounded">
+              <span className="px-2 py-0.5 bg-amber-900/60 text-amber-200 border border-amber-700/60 rounded">
                 Mixed-Script Tokens: {mixedTokens.slice(0, 3).join(', ')}
               </span>
             )}
@@ -174,6 +180,128 @@ export default function EmailViewer({ parsed, qrCodes, macros, obfuscation, case
           {getAuthBadge(authResults.dmarc?.result, 'DMARC')}
         </div>
       </div>
+
+      {/* 1b. Live DNS Protocol Validation & Identity Alignment */}
+      {dnsValidation && dnsValidation.domain && (
+        <div className="p-4 bg-gray-900/80 border border-gray-800 rounded-lg space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-2.5">
+            <div className="flex items-center space-x-2">
+              <Globe className="w-4 h-4 text-cyan-400" />
+              <span className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                Live DNS Protocol Validation & Identity Alignment
+              </span>
+              <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
+                Authoritative Resolver
+              </span>
+            </div>
+            <div className="flex items-center space-x-2 text-xs font-mono">
+              <span className="text-gray-400">Target Domain:</span>
+              <span className="text-cyan-300 font-semibold">{dnsValidation.domain}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            {/* SPF Live Card */}
+            <div className="p-3 bg-gray-950/60 border border-gray-800/80 rounded-md space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-indigo-400" /> Live SPF Check
+                </span>
+                {dnsValidation.spf?.is_ip_authorized === true ? (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800 rounded">
+                    AUTHORIZED IP
+                  </span>
+                ) : dnsValidation.spf?.is_ip_authorized === false ? (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-red-950/80 text-red-400 border border-red-800 rounded">
+                    UNAUTHORIZED IP
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-gray-800 text-gray-400 border border-gray-700 rounded">
+                    {dnsValidation.spf?.raw_record ? 'RECORD FOUND' : 'NO RECORD'}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400 font-mono truncate" title={dnsValidation.spf?.raw_record || 'None'}>
+                {dnsValidation.spf?.raw_record || 'No SPF TXT record published'}
+              </p>
+              {dnsValidation.spf?.default_policy && (
+                <div className="text-[10px] text-gray-500 font-mono">
+                  Default Policy: <span className="text-gray-300 font-bold">{dnsValidation.spf.default_policy}</span>
+                </div>
+              )}
+            </div>
+
+            {/* DMARC Policy Card */}
+            <div className="p-3 bg-gray-950/60 border border-gray-800/80 rounded-md space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-purple-400" /> DMARC Policy
+                </span>
+                {dnsValidation.dmarc?.is_enforced ? (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800 rounded">
+                    ENFORCED ({dnsValidation.dmarc.policy?.toUpperCase()})
+                  </span>
+                ) : dnsValidation.dmarc?.policy ? (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-amber-950/80 text-amber-400 border border-amber-800 rounded">
+                    MONITOR ONLY (p={dnsValidation.dmarc.policy})
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-red-950/80 text-red-400 border border-red-800 rounded">
+                    NO DMARC RECORD
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400 font-mono truncate" title={dnsValidation.dmarc?.raw_record || 'None'}>
+                {dnsValidation.dmarc?.raw_record || 'No _dmarc TXT record'}
+              </p>
+              <div className="text-[10px] text-gray-500 font-mono">
+                Subdomain: <span className="text-gray-300">{dnsValidation.dmarc?.subdomain_policy || 'inherit'}</span> | Pct: <span className="text-gray-300">{dnsValidation.dmarc?.percentage ?? 100}%</span>
+              </div>
+            </div>
+
+            {/* Alignment & Inbound MX */}
+            <div className="p-3 bg-gray-950/60 border border-gray-800/80 rounded-md space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-cyan-400" /> Identity Alignment
+                </span>
+                {dnsValidation.alignment?.dmarc_pass ? (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800 rounded">
+                    ALIGNED (PASS)
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono bg-amber-950/80 text-amber-400 border border-amber-800 rounded">
+                    ALIGNMENT FAIL
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] font-mono text-gray-400 space-y-0.5">
+                <div>SPF Alignment: <span className="text-gray-200">{dnsValidation.alignment?.spf_alignment || 'none'}</span></div>
+                <div>DKIM Alignment: <span className="text-gray-200">{dnsValidation.alignment?.dkim_alignment || 'none'}</span></div>
+                <div>Inbound MX: {dnsValidation.mx?.is_send_only ? (
+                  <span className="text-red-400 font-bold">SEND-ONLY / NO MX</span>
+                ) : (
+                  <span className="text-emerald-400 font-medium">{dnsValidation.mx?.servers?.length || 0} MX host(s)</span>
+                )}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* DNS Anomalies */}
+          {dnsValidation.anomalies && dnsValidation.anomalies.length > 0 && (
+            <div className="p-2.5 bg-red-950/20 border border-red-900/40 rounded text-xs space-y-1">
+              <span className="text-red-400 font-semibold text-[11px] flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-400" /> DNS / Protocol Anomalies Detected:
+              </span>
+              <ul className="list-disc list-inside text-gray-300 text-[11px] space-y-0.5 pl-1">
+                {dnsValidation.anomalies.map((anom, idx) => (
+                  <li key={idx}>{anom}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 2. Key Envelope Headers */}
       <div className="p-4 bg-gray-900/60 border border-gray-800 rounded-lg space-y-2 text-xs">

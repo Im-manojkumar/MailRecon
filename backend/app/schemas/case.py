@@ -17,6 +17,9 @@ class CaseResponse(BaseModel):
     filename: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    threat_category: Optional[str] = None
+    category_label: Optional[str] = None
+    risk_score: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

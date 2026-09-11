@@ -50,6 +50,9 @@ export interface CaseResponse {
   file_name?: string | null; // alias
   created_at: string;
   updated_at?: string | null;
+  threat_category?: string | null;
+  category_label?: string | null;
+  risk_score?: number | null;
 }
 
 export interface CaseDetail extends CaseResponse {
@@ -162,26 +165,46 @@ export interface AIAnalysisResponse {
 export interface GeoIPData {
   ip: string;
   country?: string | null;
+  country_code?: string | null;
   city?: string | null;
+  region?: string | null;
+  timezone?: string | null;
   asn?: string | null;
   org?: string | null;
+  isp?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   is_private: boolean;
+  is_proxy?: boolean | null;
+  is_hosting?: boolean | null;
+}
+
+export interface InfrastructureTag {
+  infra_type: string;
+  label: string;
+  description: string;
+  risk_level: string;
+  provider?: string | null;
+  is_anonymized: boolean;
 }
 
 export interface RouteHopEnrichment {
-  hop: number;
+  hop?: number;
+  hop_number?: number;
   from_claimed?: string | null;
+  from_host?: string | null;
   by_node?: string | null;
+  by_host?: string | null;
   ip?: string | null;
   geoip?: GeoIPData | null;
+  infra_tag?: InfrastructureTag | null;
   delay_seconds?: number | null;
   delay_display?: string | null;
   delay_anomaly?: string | null;
   tls_version?: string | null;
   cipher?: string | null;
   timestamp_iso?: string | null;
+  is_originating?: boolean;
 }
 
 export interface RouteAnalysisResponse {
@@ -189,6 +212,96 @@ export interface RouteAnalysisResponse {
   total_transit_seconds?: number | null;
   total_transit_display?: string | null;
   anomalies: string[];
+  originating_node?: RouteHopEnrichment | null;
+  origin_confidence?: string;
+}
+
+export interface DomainIntelResponse {
+  domain: string;
+  registrar?: string | null;
+  created_at_iso?: string | null;
+  expires_at_iso?: string | null;
+  domain_age_days?: number | null;
+  is_newly_registered: boolean;
+  is_recent: boolean;
+  risk_level: string;
+  status: string[];
+}
+
+export interface LiveDnsValidationResponse {
+  domain: string;
+  dns_resolved: boolean;
+  spf: {
+    raw_record?: string | null;
+    mechanisms?: string[];
+    default_policy?: string;
+    is_ip_authorized?: boolean | null;
+    matching_mechanism?: string | null;
+  };
+  dmarc: {
+    raw_record?: string | null;
+    policy?: string;
+    subdomain_policy?: string | null;
+    percentage?: number;
+    rua?: string | null;
+    is_enforced?: boolean;
+  };
+  mx: {
+    has_mx?: boolean;
+    servers?: Array<{ preference: number; exchange: string }>;
+    is_send_only?: boolean;
+  };
+  alignment: {
+    from_domain?: string;
+    return_path_domain?: string | null;
+    dkim_domain?: string | null;
+    spf_alignment?: string;
+    dkim_alignment?: string;
+    dmarc_pass?: boolean;
+  };
+  message_id_valid: boolean;
+  anomalies: string[];
+}
+
+export interface OriginProfileResponse {
+  originating_ip?: string | null;
+  country?: string | null;
+  country_code?: string | null;
+  city?: string | null;
+  isp?: string | null;
+  org?: string | null;
+  asn?: string | null;
+  infra_type?: string | null;
+  infra_label?: string | null;
+  origin_confidence: string;
+  is_anonymized: boolean;
+}
+
+export interface ThreatClassificationResponse {
+  primary_category: string;
+  category_label: string;
+  confidence: number;
+  secondary_categories: Array<{
+    category: string;
+    label: string;
+    confidence: number;
+  }>;
+  justification: string[];
+  action_summary: string;
+}
+
+export interface FinancialForensicsResponse {
+  is_financial_threat: boolean;
+  risk_level: string;
+  bank_accounts: string[];
+  routing_numbers: string[];
+  swift_codes: string[];
+  crypto_wallets: Array<{ type: string; address: string }>;
+  amounts_mentioned: string[];
+  invoice_numbers: string[];
+  diversion_indicators: string[];
+  vendor_mismatch?: string | null;
+  threat_score: number;
 }
 
 export interface QrCodeResult {
@@ -303,3 +416,110 @@ export interface ObfuscationAnalysisResponse {
   body: ObfuscationSection;
   subject: ObfuscationSection;
 }
+
+export interface PlaybookItem {
+  action_id: string;
+  pillar: string;
+  pillar_label: string;
+  priority: string;
+  title: string;
+  description: string;
+  target_asset: string;
+  automated_script?: string | null;
+  script_language?: string | null;
+  manual_steps: string[];
+  completed: boolean;
+}
+
+export interface PlaybookResponse {
+  case_id: string;
+  total_actions: number;
+  completed_actions: number;
+  critical_actions: number;
+  items: PlaybookItem[];
+}
+
+export interface SharedArtifactItem {
+  kind: string;
+  value: string;
+  label: string;
+  occurrences: number;
+  case_ids: string[];
+}
+
+export interface CampaignMemberCase {
+  case_id: string;
+  filename: string;
+  created_at: string;
+  score: number;
+  threat_category: string;
+  category_label: string;
+  from_email: string;
+  from_domain: string;
+  recipient: string;
+  subject: string;
+  orig_ip?: string | null;
+  infra_label?: string | null;
+}
+
+export interface CampaignListItem {
+  campaign_id: string;
+  name: string;
+  threat_category: string;
+  threat_archetype: string;
+  risk_score: number;
+  confidence: number;
+  first_seen: string;
+  last_seen: string;
+  case_count: number;
+  tactics: string[];
+  description: string;
+}
+
+export interface CampaignListResponse {
+  items: CampaignListItem[];
+  total: number;
+}
+
+export interface CampaignGraphNode {
+  id: string;
+  label: string;
+  sublabel?: string;
+  type: string;
+  category?: string;
+  risk_level?: string;
+  details?: Record<string, any>;
+}
+
+export interface CampaignGraphEdge {
+  source: string;
+  target: string;
+  label: string;
+  weight?: number;
+}
+
+export interface CampaignDetail extends CampaignListItem {
+  cases: CampaignMemberCase[];
+  shared_artifacts: SharedArtifactItem[];
+  graph: {
+    nodes: CampaignGraphNode[];
+    edges: CampaignGraphEdge[];
+  };
+}
+
+export interface CaseCampaignAffiliation {
+  case_id: string;
+  is_part_of_campaign: boolean;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  threat_archetype?: string | null;
+  total_correlated_cases: number;
+  shared_artifacts: SharedArtifactItem[];
+  affiliated_cases: CampaignMemberCase[];
+  graph?: {
+    nodes: CampaignGraphNode[];
+    edges: CampaignGraphEdge[];
+  } | null;
+}
+
+

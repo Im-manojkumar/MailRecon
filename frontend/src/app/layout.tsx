@@ -18,7 +18,11 @@ function Navbar() {
         <nav className="flex items-center space-x-6">
           {analyst ? (
             <>
-              <Link href="/" className="text-sm font-medium text-gray-300 hover:text-white">Dashboard</Link>
+              <Link href="/" className="text-sm font-medium text-gray-300 hover:text-white transition-colors">Cases</Link>
+              <Link href="/campaigns" className="text-sm font-medium text-gray-300 hover:text-white transition-colors flex items-center gap-1.5">
+                <span>Threat Campaigns</span>
+                <span className="px-1.5 py-0.2 bg-purple-950 text-purple-300 border border-purple-800 rounded text-[10px] font-mono">CORRELATED</span>
+              </Link>
               <div className="h-4 w-px bg-gray-700" />
               <span className="text-sm text-gray-400">{analyst.display_name}</span>
               <button onClick={logout} className="text-sm font-medium text-red-400 hover:text-red-300">

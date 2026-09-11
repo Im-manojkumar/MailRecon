@@ -68,3 +68,93 @@ class ObfuscationAnalysisResponse(BaseModel):
     body: ObfuscationSection
     subject: ObfuscationSection
 
+
+class DomainIntelResponse(BaseModel):
+    domain: str
+    registrar: Optional[str] = None
+    created_at_iso: Optional[str] = None
+    expires_at_iso: Optional[str] = None
+    domain_age_days: Optional[int] = None
+    is_newly_registered: bool = False
+    is_recent: bool = False
+    risk_level: str = "unknown"
+    status: list[str] = []
+
+
+class LiveDnsValidationResponse(BaseModel):
+    domain: str
+    dns_resolved: bool
+    spf: dict
+    dmarc: dict
+    mx: dict
+    alignment: dict
+    message_id_valid: bool
+    anomalies: list[str] = []
+
+
+class OriginProfileResponse(BaseModel):
+    originating_ip: Optional[str] = None
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    city: Optional[str] = None
+    isp: Optional[str] = None
+    org: Optional[str] = None
+    asn: Optional[str] = None
+    infra_type: Optional[str] = None
+    infra_label: Optional[str] = None
+    origin_confidence: str = "inconclusive"
+    is_anonymized: bool = False
+
+
+class FinancialForensicsResponse(BaseModel):
+    is_financial_threat: bool
+    risk_level: str = "none"
+    bank_accounts: list[str] = []
+    routing_numbers: list[str] = []
+    swift_codes: list[str] = []
+    crypto_wallets: list[dict] = []
+    amounts_mentioned: list[str] = []
+    invoice_numbers: list[str] = []
+    diversion_indicators: list[str] = []
+    vendor_mismatch: Optional[str] = None
+    threat_score: float = 0.0
+
+
+class ThreatClassificationResponse(BaseModel):
+    primary_category: str
+    category_label: str
+    confidence: float
+    secondary_categories: list[dict] = []
+    justification: list[str] = []
+    action_summary: str
+
+
+class PlaybookItem(BaseModel):
+    action_id: str
+    pillar: str
+    pillar_label: str = ""
+    priority: str
+    title: str
+    description: str
+    target_asset: str = ""
+    automated_script: Optional[str] = None
+    script_language: Optional[str] = None
+    manual_steps: list[str] = []
+    completed: bool = False
+
+
+class PlaybookResponse(BaseModel):
+    case_id: str
+    total_actions: int = 0
+    completed_actions: int = 0
+    critical_actions: int = 0
+    items: list[PlaybookItem] = []
+
+
+class PlaybookToggleRequest(BaseModel):
+    action_id: str
+    completed: bool
+
+
+
+

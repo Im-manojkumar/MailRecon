@@ -85,11 +85,173 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         parsed_record.auth_results_json = parsed_result.auth_results
         parsed_record.received_chain_json = parsed_result.received_chain
 
-        # 5. Run deterministic security detectors and persist findings
+        # 5. Execute Route Analysis, Origin Tracing & Infrastructure Categorization
+        from email.utils import parseaddr
+        from app.enrichment.route_analyzer import RouteAnalyzer
+        from app.parser.dns_validator import DnsProtocolValidator
+        from app.enrichment.domain_intel import DomainIntelService
+
+        current_metadata = dict(case.metadata_json or {})
+
+        route_res = RouteAnalyzer.analyze(parsed_result.received_chain)
+        current_metadata["route_analysis"] = route_res.to_dict()
+
+        orig_node = route_res.originating_node or {}
+        orig_ip = orig_node.get("ip")
+        infra_tag = orig_node.get("infra_tag") or {}
+
+        origin_profile = {
+            "originating_ip": orig_ip,
+            "country": (orig_node.get("geoip") or {}).get("country"),
+            "country_code": (orig_node.get("geoip") or {}).get("country_code"),
+            "city": (orig_node.get("geoip") or {}).get("city"),
+            "isp": (orig_node.get("geoip") or {}).get("isp"),
+            "org": (orig_node.get("geoip") or {}).get("org"),
+            "asn": (orig_node.get("geoip") or {}).get("asn"),
+            "infra_type": infra_tag.get("infra_type"),
+            "infra_label": infra_tag.get("label"),
+            "origin_confidence": route_res.origin_confidence,
+            "is_anonymized": infra_tag.get("is_anonymized", False),
+        }
+        current_metadata["origin_profile"] = origin_profile
+
+        # 6. Live DNS Protocol Validation and Domain Intelligence
+        from_raw = parsed_result.headers.get("from") or parsed_result.headers.get("From") or ""
+        _, from_addr = parseaddr(from_raw)
+        from_domain = from_addr.split("@")[-1].lower().strip() if "@" in from_addr else ""
+
+        rp_raw = parsed_result.headers.get("return-path") or parsed_result.headers.get("Return-Path") or ""
+        _, rp_addr = parseaddr(rp_raw)
+        rp_domain = rp_addr.split("@")[-1].lower().strip() if "@" in rp_addr else None
+
+        dkim_domain = None
+        if parsed_result.auth_results and parsed_result.auth_results.get("dkim"):
+            dkim_domain = parsed_result.auth_results["dkim"].get("domain")
+
+        msg_id = parsed_result.headers.get("message-id") or parsed_result.headers.get("Message-ID")
+
+        dns_res = DnsProtocolValidator.validate_domain(
+            from_domain=from_domain,
+            originating_ip=orig_ip,
+            return_path_domain=rp_domain,
+            dkim_domain=dkim_domain,
+            message_id=msg_id,
+        )
+        current_metadata["dns_validation"] = dns_res.to_dict()
+
+        domain_prof = DomainIntelService.lookup(from_domain)
+        current_metadata["domain_intel"] = domain_prof.to_dict()
+
+        # 7. Run deterministic security detectors and combine with protocol/infra findings
         from app.detectors import run_all_detectors
-        from app.models.finding import Finding
-        
+        from app.detectors.base import FindingData
+        from app.models.finding import Finding, SeverityLevel
+
         findings_data = run_all_detectors(parsed_result)
+
+        # Ingest origin infrastructure findings
+        if infra_tag.get("infra_type") == "TOR_EXIT":
+            findings_data.append(FindingData(
+                detector="origin_traceability",
+                severity=SeverityLevel.critical,
+                title="Originating Node: TOR Anonymization Network",
+                detail="Forensic route analysis traced the earliest reliable sending node to a known Onion Router (TOR) exit node. Legitimate enterprise communications do not originate from darknet anonymizers.",
+                evidence_ref="route.originating_node",
+                confidence=0.98,
+                raw_evidence=orig_node,
+            ))
+        elif infra_tag.get("infra_type") == "RESIDENTIAL_BROADBAND" and not (orig_node.get("geoip") or {}).get("is_private"):
+            findings_data.append(FindingData(
+                detector="origin_traceability",
+                severity=SeverityLevel.high,
+                title=f"Direct Residential Broadband Origin ({infra_tag.get('provider') or 'Consumer ISP'})",
+                detail="The email originated directly from consumer broadband or residential cable/DSL without routing through an authorized enterprise mail server, indicating a compromised home/office machine or botnet node.",
+                evidence_ref="route.originating_node",
+                confidence=0.88,
+                raw_evidence=orig_node,
+            ))
+        elif infra_tag.get("infra_type") == "VPN_PROXY":
+            findings_data.append(FindingData(
+                detector="origin_traceability",
+                severity=SeverityLevel.medium,
+                title=f"Anonymizing VPN / Proxy Origin ({infra_tag.get('provider') or 'Commercial VPN'})",
+                detail="Transmission originated from an anonymizing commercial VPN or proxy gateway, obscuring the true physical origin.",
+                evidence_ref="route.originating_node",
+                confidence=0.85,
+                raw_evidence=orig_node,
+            ))
+
+        # Ingest domain age and protocol findings
+        if domain_prof.is_newly_registered and domain_prof.domain_age_days is not None:
+            findings_data.append(FindingData(
+                detector="domain_intelligence",
+                severity=SeverityLevel.critical,
+                title=f"Newly Registered Sender Domain ({domain_prof.domain_age_days} Days Old)",
+                detail=f"The sender domain '{from_domain}' was registered only {domain_prof.domain_age_days} days ago (Registrar: {domain_prof.registrar or 'Public Registrar'}). Freshly registered domains are heavily correlated with targeted phishing campaigns.",
+                evidence_ref="domain_intel.created_at",
+                confidence=0.95,
+                raw_evidence=domain_prof.to_dict(),
+            ))
+        elif domain_prof.is_recent and domain_prof.domain_age_days is not None:
+            findings_data.append(FindingData(
+                detector="domain_intelligence",
+                severity=SeverityLevel.medium,
+                title=f"Recently Registered Sender Domain ({domain_prof.domain_age_days} Days Old)",
+                detail=f"The sender domain '{from_domain}' was registered {domain_prof.domain_age_days} days ago. Domains under 90 days old present elevated risk of lookalike spoofing.",
+                evidence_ref="domain_intel.created_at",
+                confidence=0.80,
+                raw_evidence=domain_prof.to_dict(),
+            ))
+
+        if dns_res.mx.is_send_only:
+            findings_data.append(FindingData(
+                detector="protocol_forensics",
+                severity=SeverityLevel.medium,
+                title="Send-Only Burner Domain (No Inbound MX Records)",
+                detail=f"Domain '{from_domain}' has NO published MX records and cannot receive incoming mail. Adversaries frequently use disposable send-only domains for unrepliable attack campaigns.",
+                evidence_ref="dns.mx",
+                confidence=0.90,
+                raw_evidence={"mx": dns_res.mx.__dict__},
+            ))
+
+        if dns_res.spf.is_ip_authorized is False and dns_res.spf.default_policy in ["fail", "softfail"]:
+            findings_data.append(FindingData(
+                detector="protocol_forensics",
+                severity=SeverityLevel.high,
+                title="Originating Node Not Authorized in Domain SPF Record",
+                detail=f"The originating IP '{orig_ip}' is not authorized in '{from_domain}' published SPF record ({dns_res.spf.raw_record}).",
+                evidence_ref="dns.spf",
+                confidence=0.94,
+                raw_evidence={"originating_ip": orig_ip, "spf": dns_res.spf.__dict__},
+            ))
+
+        # Run Payment Diversion and Financial Fraud Detector
+        from app.detectors.financial_fraud import FinancialFraudDetector
+        raw_atts = [{"filename": a.filename, "content_type": a.content_type} for a in parsed_result.attachments]
+        fin_res = FinancialFraudDetector.analyze(
+            subject=parsed_result.headers.get("subject", ""),
+            body_text=parsed_result.body_text or "",
+            from_header=from_raw,
+            reply_to=parsed_result.headers.get("reply-to"),
+            attachments=raw_atts,
+        )
+        current_metadata["financial_forensics"] = fin_res.to_dict()
+
+        if fin_res.is_financial_threat:
+            sev = SeverityLevel.critical if fin_res.risk_level == "critical" else SeverityLevel.high
+            fin_detail = f"Message exhibits payment redirection patterns (Indicators: {', '.join(fin_res.diversion_indicators[:3])})."
+            if fin_res.vendor_mismatch:
+                fin_detail += f" {fin_res.vendor_mismatch}"
+            findings_data.append(FindingData(
+                detector="financial_fraud",
+                severity=sev,
+                title="Payment Diversion / BEC Financial Wire Fraud Detected",
+                detail=fin_detail,
+                evidence_ref="body.financial_forensics",
+                confidence=max(0.85, fin_res.threat_score),
+                raw_evidence=fin_res.to_dict(),
+            ))
+
         for fd in findings_data:
             finding_record = Finding(
                 case_id=case.id,
@@ -103,9 +265,8 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
             )
             session.add(finding_record)
 
-        # 6. Generate grounded AI forensic intelligence briefing
+        # 8. Generate grounded AI forensic intelligence briefing
         from app.ai import get_ai_provider
-        current_metadata = dict(case.metadata_json or {})
         try:
             ai_provider = get_ai_provider()
             ai_analysis = await ai_provider.generate_analysis(parsed_result, findings_data)
@@ -113,7 +274,7 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         except Exception as e:
             logger.warning(f"Failed to generate AI analysis for case {case_id}: {e}")
 
-        # 7. Compute multi-dimensional risk score, confidence, and coverage
+        # 9. Compute multi-dimensional risk score, confidence, and coverage
         from app.scoring import RiskScoringEngine
         try:
             score_result = RiskScoringEngine.compute_score(parsed_result, findings_data)
@@ -129,15 +290,7 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         except Exception as e:
             logger.warning(f"Failed to compute risk score for case {case_id}: {e}")
 
-        # 8. Forensic route analysis and GeoIP enrichment
-        from app.enrichment.route_analyzer import RouteAnalyzer
-        try:
-            route_res = RouteAnalyzer.analyze(parsed_result.received_chain)
-            current_metadata["route_analysis"] = route_res.to_dict()
-        except Exception as e:
-            logger.warning(f"Failed to analyze route for case {case_id}: {e}")
-
-        # 9. Quishing inspection (QR Code matrix decoding)
+        # 10. Quishing inspection (QR Code matrix decoding)
         from app.enrichment.qr_decoder import QrCodeDecoder
         qr_list: list = []
         try:
@@ -188,9 +341,29 @@ async def _async_process_case(case_id: uuid.UUID) -> bool:
         if parsed_result.mime_depth_exceeded:
             current_metadata["warning"] = "MIME depth exceeded maximum allowed limit"
 
+        # 13. Multi-Class Threat Classification Engine
+        from app.scoring.threat_classifier import MultiClassThreatClassifier
+        try:
+            fd_dicts = [{"title": f.title, "detector": f.detector, "severity": f.severity.value, "detail": f.detail} for f in findings_data]
+            threat_class_res = MultiClassThreatClassifier.classify(
+                subject=parsed_result.headers.get("subject", ""),
+                body_text=parsed_result.body_text or "",
+                from_header=from_raw,
+                findings=fd_dicts,
+                financial_result=current_metadata.get("financial_forensics"),
+                macros=current_metadata.get("macro_analysis"),
+                obfuscation=current_metadata.get("obfuscation_analysis"),
+                dns_validation=current_metadata.get("dns_validation"),
+                domain_intel=current_metadata.get("domain_intel"),
+                risk_score=(current_metadata.get("risk_score") or {}).get("score", 0.0),
+            )
+            current_metadata["threat_classification"] = threat_class_res.to_dict()
+        except Exception as e:
+            logger.warning(f"Failed to classify threat category for case {case_id}: {e}")
+
         case.metadata_json = current_metadata
 
-        # 13. Transition status to completed
+        # 14. Transition status to completed
         case.status = CaseStatus.completed
 
         await session.commit()
