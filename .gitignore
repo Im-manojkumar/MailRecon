@@ -40,6 +40,11 @@ Thumbs.db
 .env.production.local
 /data/
 /evidence/
+data/
+evidence/
+*.db
+*.sqlite3
+mailrecon.db
 *.eml
 
 # Exceptions

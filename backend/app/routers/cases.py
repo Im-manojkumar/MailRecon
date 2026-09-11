@@ -3,7 +3,7 @@ import json
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm.attributes import flag_modified
@@ -59,6 +59,7 @@ async def get_case_or_404(case_id: uuid.UUID, analyst_id: uuid.UUID, db: AsyncSe
 
 @router.post("", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_case(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     analyst_id: uuid.UUID = Depends(get_current_analyst),
     db: AsyncSession = Depends(get_db),
@@ -96,8 +97,11 @@ async def create_case(
     await db.commit()
     await db.refresh(new_case)
 
-    # Enqueue background analysis job
-    enqueue_case_analysis(new_case.id)
+    # Enqueue background analysis job (RQ if available, else BackgroundTasks)
+    queued = enqueue_case_analysis(new_case.id)
+    if not queued:
+        from app.tasks.jobs import _async_process_case
+        background_tasks.add_task(_async_process_case, new_case.id)
 
     return new_case
 

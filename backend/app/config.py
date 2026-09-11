@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
     # Evidence storage
-    STORAGE_ROOT: str = "/data/evidence"
+    STORAGE_ROOT: str = "./data/evidence"
     # Auth
     SECRET_KEY: str = Field(
         default="dev-secret-key-change-in-production",
@@ -25,7 +25,18 @@ class Settings(BaseSettings):
     MAX_MIME_DEPTH: int = 10
     MAX_IMAGE_DECODE_BYTES: int = 10_485_760  # 10 MB
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:3005",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
+        "http://127.0.0.1:3003",
+        "http://127.0.0.1:3005",
+    ]
     # AI
     AI_PROVIDER: str = "mock"  # "mock" | "gemini"
     GEMINI_API_KEY: str | None = None

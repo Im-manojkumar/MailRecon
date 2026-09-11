@@ -8,8 +8,8 @@ import Link from 'next/link';
 import { Shield } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('analyst@mailrecon.io');
+  const [password, setPassword] = useState('Password123!');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -36,6 +36,12 @@ export default function LoginPage() {
         <div className="flex flex-col items-center mb-8">
           <Shield className="w-12 h-12 text-primary-500 mb-2" />
           <h1 className="text-2xl font-bold text-white">Analyst Login</h1>
+          <div className="mt-2 text-xs bg-primary-950/60 border border-primary-800 text-primary-300 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+            <span>Demo:</span>
+            <span className="font-mono text-white">analyst@mailrecon.io</span>
+            <span>/</span>
+            <span className="font-mono text-white">Password123!</span>
+          </div>
         </div>
         
         {error && <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded mb-6 text-sm">{error}</div>}

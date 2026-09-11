@@ -28,7 +28,7 @@ from app.auth import hash_password
 from app.storage.deps import get_evidence_store
 from app.tasks.jobs import _async_process_case
 
-DEMO_ANALYST_EMAIL = "analyst@mailrecon.local"
+DEMO_ANALYST_EMAIL = "analyst@mailrecon.io"
 DEMO_ANALYST_PASSWORD = "Password123!"
 
 # Realistic second BEC case sharing IBAN with bec_urgent.eml to form a live campaign

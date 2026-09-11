@@ -13,8 +13,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # DB init or other startup tasks could go here
     logger.info("Starting up MailRecon AI backend")
+    # Initialize database tables if not existing
+    from app.database import Base
+    import app.models  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     # Cleanup
     await engine.dispose()
